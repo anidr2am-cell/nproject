@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'firebase_options.dart';
 import 'package:image_picker/image_picker.dart';
@@ -52,6 +53,12 @@ Stream<User?> _authStateStream() {
 User? _currentUserOrNull() {
   if (_firebaseUnavailableMessage() != null) return null;
   return FirebaseAuth.instance.currentUser;
+}
+
+Future<void> _openLoginScreen(BuildContext context) {
+  return Navigator.of(
+    context,
+  ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
 }
 
 String _firebaseMessage(FirebaseException error) {
@@ -138,11 +145,60 @@ class _AppShellState extends State<AppShell> {
   int _index = 0;
 
   late final List<Widget> _pages = [
-    HomeScreen(onWrite: () => setState(() => _index = 2)),
+    HomeScreen(onWrite: _handleWriteTap),
     const CategoryScreen(),
-    const PostListingScreen(),
+    PostListingScreen(onSubmitSuccess: _moveToHomeTab),
     const MyPageScreen(),
   ];
+
+  Future<void> _promptLoginThenOpen() async {
+    final shouldMoveToLogin = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('로그인 필요'),
+        content: const Text('로그인 후 이용이 가능합니다. 로그인 페이지로 이동할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: _brandOrange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('로그인'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || shouldMoveToLogin != true) return;
+    await _openLoginScreen(context);
+  }
+
+  void _moveToHomeTab() {
+    if (!mounted) return;
+    setState(() => _index = 0);
+  }
+
+  Future<void> _handleWriteTap() async {
+    if (_currentUserOrNull() == null) {
+      await _promptLoginThenOpen();
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _index = 2);
+  }
+
+  Future<void> _handleDestinationTap(int value) async {
+    if (value == 2 && _currentUserOrNull() == null) {
+      await _promptLoginThenOpen();
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _index = value);
+  }
 
   @override
   void initState() {
@@ -222,7 +278,7 @@ class _AppShellState extends State<AppShell> {
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           indicatorColor: _brandOrange.withValues(alpha: 0.12),
-          onDestinationSelected: (value) => setState(() => _index = value),
+          onDestinationSelected: (value) => _handleDestinationTap(value),
           destinations: const [
             NavigationDestination(
               icon: Icon(Icons.home_outlined),
@@ -264,8 +320,26 @@ class HomeScreen extends StatelessWidget {
           stream: _authStateStream(),
           builder: (context, snapshot) {
             final user = snapshot.data;
-            final name = user?.displayName?.trim().isNotEmpty == true
-                ? user!.displayName!.trim()
+            if (user == null) {
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => _openLoginScreen(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: _ink,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    textStyle: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  child: const Text('로그인'),
+                ),
+              );
+            }
+
+            final name = user.displayName?.trim().isNotEmpty == true
+                ? user.displayName!.trim()
                 : '하늘상점';
             return Text('$name님');
           },
@@ -484,6 +558,8 @@ class ListingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imageUrl = listing.photoUrls.isNotEmpty ? listing.photoUrls.first : null;
+
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -500,7 +576,17 @@ class ListingTile extends StatelessWidget {
                   color: listing.color,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(listing.icon, color: Colors.white, size: 34),
+                child: imageUrl == null
+                    ? Icon(listing.icon, color: Colors.white, size: 34)
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              Icon(listing.icon, color: Colors.white, size: 34),
+                        ),
+                      ),
               ),
             ),
             const SizedBox(width: 14),
@@ -551,10 +637,7 @@ class ListingTile extends StatelessWidget {
                           color: _muted,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          '${listing.sellerNickname} · 거래 ${listing.tradeCount}회',
-                          style: const TextStyle(color: _muted, fontSize: 12),
-                        ),
+                        _SellerTradeLine(listing: listing),
                       ],
                     ),
                   ),
@@ -565,6 +648,65 @@ class ListingTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+bool _isSampleListing(MarketListing listing) {
+  return _findSampleListingById(listing.id) != null;
+}
+
+bool _isMyListing(MarketListing listing) {
+  final uid = _currentUserOrNull()?.uid;
+  return uid != null &&
+      listing.sellerUid != null &&
+      listing.sellerUid == uid;
+}
+
+bool _canManageFirestoreListing(MarketListing listing) {
+  return _isMyListing(listing) && !_isSampleListing(listing);
+}
+
+String _saleStatusLabel(String status) {
+  return status == 'sold' ? '판매완료' : '판매중';
+}
+
+Future<void> _updateListingSaleStatus(
+  BuildContext context,
+  String listingId,
+  String status,
+) async {
+  final unavailableMessage = _firebaseUnavailableMessage();
+  if (unavailableMessage != null) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(unavailableMessage)));
+    }
+    return;
+  }
+
+  try {
+    await FirebaseFirestore.instance
+        .collection('listings')
+        .doc(listingId)
+        .update({
+          'status': status,
+          'updatedAt': FieldValue.serverTimestamp(),
+        })
+        .timeout(_firebaseRequestTimeout);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('상태가 ${_saleStatusLabel(status)}(으)로 변경되었습니다.')),
+      );
+    }
+  } catch (error, stackTrace) {
+    debugPrint('[ListingStatus] update failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('판매 상태 변경에 실패했습니다.')));
+    }
   }
 }
 
@@ -580,6 +722,15 @@ class ListingDetailScreen extends StatefulWidget {
 class _ListingDetailScreenState extends State<ListingDetailScreen> {
   int _imageIndex = 0;
   final PageController _pageController = PageController();
+  late MarketListing _listing;
+  late String _saleStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _listing = widget.listing;
+    _saleStatus = widget.listing.status;
+  }
 
   @override
   void dispose() {
@@ -587,9 +738,86 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     super.dispose();
   }
 
+  Future<void> _openEditScreen() async {
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PostListingScreen(
+          editingListingId: _listing.id,
+          initialListing: _listing,
+        ),
+      ),
+    );
+    if (!mounted || updated != true) return;
+
+    final refreshed = await _findListingById(_listing.id);
+    if (refreshed != null) {
+      setState(() {
+        _listing = refreshed;
+        _saleStatus = refreshed.status;
+      });
+    }
+  }
+
+  Future<void> _deleteListing() async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('물품 삭제'),
+        content: const Text('정말 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: _brandOrange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || shouldDelete != true) return;
+
+    final unavailableMessage = _firebaseUnavailableMessage();
+    if (unavailableMessage != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(unavailableMessage)));
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('listings')
+          .doc(_listing.id)
+          .delete()
+          .timeout(_firebaseRequestTimeout);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('물품이 삭제되었습니다.')));
+      Navigator.of(context).pop(true);
+    } catch (error, stackTrace) {
+      debugPrint('[ListingDelete] failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('물품 삭제에 실패했습니다.')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final listing = widget.listing;
+    final listing = _listing;
+    final isOwner = _canManageFirestoreListing(listing);
+    final imageCount = listing.photoUrls.isNotEmpty
+        ? listing.photoUrls.length
+        : listing.photoCount;
 
     return Scaffold(
       body: CustomScrollView(
@@ -612,9 +840,30 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               background: PageView.builder(
                 controller: _pageController,
                 physics: const PageScrollPhysics(),
-                itemCount: listing.photoCount,
+                itemCount: imageCount,
                 onPageChanged: (value) => setState(() => _imageIndex = value),
                 itemBuilder: (context, index) {
+                  if (listing.photoUrls.isNotEmpty) {
+                    return Hero(
+                      tag: index == 0 ? listing.id : '${listing.id}-$index',
+                      child: Image.network(
+                        listing.photoUrls[index],
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          color: Color.lerp(
+                            listing.color,
+                            Colors.black,
+                            index * 0.08,
+                          ),
+                          child: Icon(
+                            listing.icon,
+                            color: Colors.white,
+                            size: 86,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
                   return Hero(
                     tag: index == 0 ? listing.id : '${listing.id}-$index',
                     child: Container(
@@ -678,13 +927,13 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     ],
                   ),
                   const Divider(height: 34),
-                  if (listing.photoCount > 1)
+                  if (imageCount > 1)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Row(
                           children: List.generate(
-                            listing.photoCount,
+                            imageCount,
                             (index) => GestureDetector(
                               onTap: () => _pageController.animateToPage(
                                 index,
@@ -706,12 +955,12 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                           ),
                         ),
                         Text(
-                          '${_imageIndex + 1}/${listing.photoCount}',
+                          '${_imageIndex + 1}/$imageCount',
                           style: const TextStyle(color: _muted),
                         ),
                       ],
                     ),
-                  if (listing.photoCount > 1)
+                  if (imageCount > 1)
                     const Padding(
                       padding: EdgeInsets.only(top: 6),
                       child: Text(
@@ -719,7 +968,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                         style: TextStyle(color: _muted, fontSize: 12),
                       ),
                     ),
-                  if (listing.photoCount > 1) const SizedBox(height: 12),
+                  if (imageCount > 1) const SizedBox(height: 12),
                   Text(
                     listing.title,
                     style: const TextStyle(
@@ -758,31 +1007,104 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             color: Colors.white,
             border: Border(top: BorderSide(color: Color(0xFFEDEDED))),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  listing.price,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
+          child: isOwner
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        listing.price,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    OutlinedButton(
+                      onPressed: _openEditScreen,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _ink,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 14,
+                        ),
+                      ),
+                      child: const Text('물품 수정'),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton(
+                      onPressed: _deleteListing,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                        side: BorderSide(color: Colors.red.shade200),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 14,
+                        ),
+                      ),
+                      child: const Text('물품 삭제'),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFEDEDED)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _saleStatus == 'sold' ? 'sold' : 'active',
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'active',
+                              child: Text('판매중'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'sold',
+                              child: Text('판매완료'),
+                            ),
+                          ],
+                          onChanged: (value) async {
+                            if (value == null || value == _saleStatus) return;
+                            await _updateListingSaleStatus(
+                              context,
+                              listing.id,
+                              value,
+                            );
+                            if (!mounted) return;
+                            setState(() => _saleStatus = value);
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        listing.price,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    _FavoriteBottomButton(listingId: listing.id),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: () => _showContactInfo(context, listing),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _brandOrange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                      ),
+                      child: Text(listing.type.label),
+                    ),
+                  ],
                 ),
-              ),
-              FilledButton(
-                onPressed: () => _showContactInfo(context, listing),
-                style: FilledButton.styleFrom(
-                  backgroundColor: _brandOrange,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 14,
-                  ),
-                ),
-                child: const Text('연락처 보기'),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -1036,7 +1358,18 @@ class CategoryScreen extends StatelessWidget {
 }
 
 class PostListingScreen extends StatefulWidget {
-  const PostListingScreen({super.key});
+  const PostListingScreen({
+    super.key,
+    this.onSubmitSuccess,
+    this.editingListingId,
+    this.initialListing,
+  });
+
+  final VoidCallback? onSubmitSuccess;
+  final String? editingListingId;
+  final MarketListing? initialListing;
+
+  bool get isEditing => editingListingId != null;
 
   @override
   State<PostListingScreen> createState() => _PostListingScreenState();
@@ -1056,6 +1389,78 @@ class _PostListingScreenState extends State<PostListingScreen> {
   String _category = categories.first;
   String _currencyDirection = '바트를 원화로';
   bool _isSubmitting = false;
+  final List<XFile> _pickedPhotos = [];
+  List<String> _existingPhotoUrls = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialListing;
+    if (initial != null) {
+      _prefillFromListing(initial);
+      _loadEditingExtraFields();
+    }
+  }
+
+  void _prefillFromListing(MarketListing listing) {
+    _type = listing.type;
+    _titleController.text = listing.title;
+    _nameController.text = listing.itemName ?? '';
+    _priceController.text = listing.price;
+    _placeController.text = listing.place;
+    _descriptionController.text = listing.description;
+    _contactController.text = listing.contactNote ?? '';
+    if (listing.type == ListingType.used &&
+        categories.contains(listing.category)) {
+      _category = listing.category;
+    }
+    if (listing.currencyDirection != null &&
+        listing.currencyDirection!.isNotEmpty) {
+      _currencyDirection = listing.currencyDirection!;
+    }
+    if (listing.exchangeRate != null && listing.exchangeRate!.isNotEmpty) {
+      _exchangeRateController.text = listing.exchangeRate!;
+    }
+    _existingPhotoUrls = [...listing.photoUrls];
+  }
+
+  Future<void> _loadEditingExtraFields() async {
+    final listingId = widget.editingListingId;
+    if (listingId == null || _firebaseUnavailableMessage() != null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('listings')
+          .doc(listingId)
+          .get()
+          .timeout(_firebaseRequestTimeout);
+      if (!doc.exists || !mounted) return;
+
+      final data = doc.data() ?? {};
+      setState(() {
+        _nameController.text = _stringValue(
+          data['itemName'],
+          _nameController.text,
+        );
+        final direction = data['currencyDirection']?.toString().trim();
+        if (direction != null && direction.isNotEmpty) {
+          _currencyDirection = direction;
+        }
+        final rate = data['exchangeRate']?.toString().trim();
+        if (rate != null && rate.isNotEmpty) {
+          _exchangeRateController.text = rate;
+        }
+        final contact = data['contact']?.toString().trim();
+        if (contact != null && contact.isNotEmpty) {
+          _contactController.text = contact;
+        }
+        _existingPhotoUrls = _stringListValue(data['photoUrls']);
+      });
+    } catch (error, stackTrace) {
+      debugPrint('[PostListingScreen] load edit fields failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
 
   @override
   void dispose() {
@@ -1083,7 +1488,12 @@ class _PostListingScreenState extends State<PostListingScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Map<String, Object?> _listingPayload() {
+  Map<String, Object?> _listingPayload({
+    required String sellerNickname,
+    required bool isUpdate,
+    required User user,
+    required List<String> photoUrls,
+  }) {
     final title = _titleController.text.trim();
     final name = _nameController.text.trim();
     final price = _priceController.text.trim();
@@ -1091,9 +1501,7 @@ class _PostListingScreenState extends State<PostListingScreen> {
     final description = _descriptionController.text.trim();
     final contact = _contactController.text.trim();
     final exchangeRate = _exchangeRateController.text.trim();
-    final user = FirebaseAuth.instance.currentUser;
-
-    return {
+    final payload = <String, Object?>{
       'type': _type.name,
       'typeLabel': _type.label,
       'title': title,
@@ -1107,15 +1515,20 @@ class _PostListingScreenState extends State<PostListingScreen> {
           ? _currencyDirection
           : null,
       'exchangeRate': _type == ListingType.currency ? exchangeRate : null,
-      'sellerUid': user?.uid,
-      'sellerEmail': user?.email,
-      'sellerNickname': user?.displayName?.trim().isNotEmpty == true
-          ? user!.displayName!.trim()
-          : user?.email ?? '익명',
-      'status': 'active',
-      'createdAt': FieldValue.serverTimestamp(),
+      'sellerUid': user.uid,
+      'sellerEmail': user.email,
+      'sellerNickname': sellerNickname,
+      'status': widget.initialListing?.status ?? 'active',
+      'photoUrls': photoUrls,
       'updatedAt': FieldValue.serverTimestamp(),
     };
+
+    if (!isUpdate) {
+      payload['createdAt'] = FieldValue.serverTimestamp();
+      payload['status'] = 'active';
+    }
+
+    return payload;
   }
 
   Future<void> _submitListing() async {
@@ -1130,6 +1543,11 @@ class _PostListingScreenState extends State<PostListingScreen> {
       _showMessage(unavailableMessage);
       return;
     }
+    if (_currentUserOrNull() == null) {
+      _showMessage('로그인 후 이용이 가능합니다.');
+      await _openLoginScreen(context);
+      return;
+    }
 
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) {
@@ -1140,7 +1558,42 @@ class _PostListingScreenState extends State<PostListingScreen> {
 
     setState(() => _isSubmitting = true);
     try {
-      final payload = _listingPayload();
+      final user = _currentUserOrNull()!;
+      final uploadedPhotoUrls = await _uploadListingPhotos(
+        userId: user.uid,
+        listingId: widget.editingListingId,
+      );
+      final photoUrls = [..._existingPhotoUrls, ...uploadedPhotoUrls];
+      final sellerNickname = await _fetchNicknameForUid(
+        user.uid,
+        displayName: user.displayName,
+        email: user.email,
+      );
+      final isUpdate = widget.isEditing;
+      final payload = _listingPayload(
+        sellerNickname: sellerNickname,
+        isUpdate: isUpdate,
+        user: user,
+        photoUrls: photoUrls,
+      );
+
+      if (isUpdate) {
+        debugPrint(
+          '[PostListingScreen] Firestore update start: listings/${widget.editingListingId}',
+        );
+        await FirebaseFirestore.instance
+            .collection('listings')
+            .doc(widget.editingListingId)
+            .update(payload)
+            .timeout(_firebaseRequestTimeout);
+        debugPrint('[PostListingScreen] Firestore update success');
+
+        if (!mounted) return;
+        _showMessage('${_type.label} 글이 수정되었습니다.');
+        Navigator.of(context).pop(true);
+        return;
+      }
+
       debugPrint('[PostListingScreen] Firestore add start: listings');
       final doc = await FirebaseFirestore.instance
           .collection('listings')
@@ -1157,11 +1610,14 @@ class _PostListingScreenState extends State<PostListingScreen> {
       _descriptionController.clear();
       _contactController.clear();
       _exchangeRateController.clear();
+      _pickedPhotos.clear();
+      _existingPhotoUrls = const [];
       setState(() {
         _category = categories.first;
         _currencyDirection = '바트를 원화로';
       });
       _showMessage('${_type.label} 글이 등록되었습니다.');
+      widget.onSubmitSuccess?.call();
     } on FirebaseException catch (error, stackTrace) {
       debugPrint(
         '[PostListingScreen] Firebase error: ${error.code} ${error.message}',
@@ -1183,10 +1639,37 @@ class _PostListingScreenState extends State<PostListingScreen> {
     }
   }
 
+  Future<List<String>> _uploadListingPhotos({
+    required String userId,
+    String? listingId,
+  }) async {
+    if (_pickedPhotos.isEmpty) return const [];
+
+    final resolvedListingId = listingId ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final uploadedUrls = <String>[];
+    for (var i = 0; i < _pickedPhotos.length; i++) {
+      final file = _pickedPhotos[i];
+      final bytes = await file.readAsBytes();
+      final ref = FirebaseStorage.instance.ref().child(
+        'listings/$userId/$resolvedListingId/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
+      );
+      await ref
+          .putData(
+            bytes,
+            SettableMetadata(contentType: 'image/jpeg'),
+          )
+          .timeout(_firebaseRequestTimeout);
+      uploadedUrls.add(await ref.getDownloadURL().timeout(_firebaseRequestTimeout));
+    }
+    return uploadedUrls;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.isEditing;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('글 등록')),
+      appBar: AppBar(title: Text(isEditing ? '글 수정' : '글 등록')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -1204,7 +1687,7 @@ class _PostListingScreenState extends State<PostListingScreen> {
                   )
                   .toList(),
               selected: {_type},
-              onSelectionChanged: _isSubmitting
+              onSelectionChanged: _isSubmitting || isEditing
                   ? null
                   : (value) => setState(() => _type = value.first),
             ),
@@ -1218,6 +1701,12 @@ class _PostListingScreenState extends State<PostListingScreen> {
                 descriptionController: _descriptionController,
                 category: _category,
                 onCategoryChanged: (value) => setState(() => _category = value),
+                onPhotosChanged: (files) {
+                  _pickedPhotos
+                    ..clear()
+                    ..addAll(files);
+                },
+                initialPhotoUrls: _existingPhotoUrls,
                 validator: _required,
               ),
             if (_type == ListingType.request)
@@ -1258,7 +1747,7 @@ class _PostListingScreenState extends State<PostListingScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : Text('${_type.label} 등록하기'),
+                  : Text(isEditing ? '${_type.label} 수정하기' : '${_type.label} 등록하기'),
             ),
           ],
         ),
@@ -1276,6 +1765,8 @@ class _UsedListingForm extends StatelessWidget {
     required this.descriptionController,
     required this.category,
     required this.onCategoryChanged,
+    required this.onPhotosChanged,
+    this.initialPhotoUrls = const [],
     required this.validator,
   });
 
@@ -1286,6 +1777,8 @@ class _UsedListingForm extends StatelessWidget {
   final TextEditingController descriptionController;
   final String category;
   final ValueChanged<String> onCategoryChanged;
+  final ValueChanged<List<XFile>> onPhotosChanged;
+  final List<String> initialPhotoUrls;
   final FormFieldValidator<String> validator;
 
   @override
@@ -1293,7 +1786,10 @@ class _UsedListingForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _PhotoPickerMock(),
+        _PhotoPickerMock(
+          onChanged: onPhotosChanged,
+          initialPhotoUrls: initialPhotoUrls,
+        ),
         const SizedBox(height: 22),
         const _InputLabel('제목'),
         TextFormField(
@@ -1626,8 +2122,14 @@ class _AuthScreenState extends State<AuthScreen> {
       debugPrint('[AuthScreen] signup success: ${user.uid}');
 
       if (!mounted) return;
-      _showMessage('회원가입이 완료되었습니다.');
-      Navigator.of(context).pop();
+      final signedIn = _currentUserOrNull() != null;
+      if (signedIn) {
+        _showMessage('회원가입이 완료되었습니다. 로그인되었습니다.');
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      } else {
+        _showMessage('회원가입이 완료되었습니다. 로그인해주세요.');
+        await _openLoginScreen(context);
+      }
     } on FirebaseAuthException catch (error, stackTrace) {
       debugPrint(
         '[AuthScreen] FirebaseAuth error: ${error.code} ${error.message}',
@@ -1786,9 +2288,7 @@ class MyPageScreen extends StatelessWidget {
               const SizedBox(height: 18),
               if (user == null) ...[
                 FilledButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  ),
+                  onPressed: () => _openLoginScreen(context),
                   style: FilledButton.styleFrom(
                     backgroundColor: _brandOrange,
                     foregroundColor: Colors.white,
@@ -1908,34 +2408,46 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('로그인')),
+      appBar: AppBar(title: const Text('로그인 / 회원가입')),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
           children: [
-            const _InputLabel('이메일 ID'),
+            AspectRatio(
+              aspectRatio: 1,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: Image.asset(
+                  'assets/images/login_bg.png',
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
             TextFormField(
               controller: _emailController,
               validator: _required,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(hintText: 'example@email.com'),
+              decoration: const InputDecoration(hintText: '아이디'),
             ),
-            const SizedBox(height: 18),
-            const _InputLabel('비밀번호'),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _passwordController,
               validator: _required,
               obscureText: true,
-              decoration: const InputDecoration(hintText: '비밀번호'),
+              decoration: const InputDecoration(hintText: '패스워드'),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
             FilledButton(
               onPressed: _isSubmitting ? null : _submitLogin,
               style: FilledButton.styleFrom(
                 backgroundColor: _brandOrange,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
               child: _isSubmitting
                   ? const SizedBox(
@@ -1947,6 +2459,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     )
                   : const Text('로그인'),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.center,
+              child: TextButton(
+                onPressed: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const AuthScreen())),
+                style: TextButton.styleFrom(
+                  foregroundColor: _ink,
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+                child: const Text('아직 계정이 없나요? 회원가입'),
+              ),
             ),
           ],
         ),
@@ -2397,9 +2923,7 @@ class _LoginRequiredScreen extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: FilledButton.icon(
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const LoginScreen())),
+            onPressed: () => _openLoginScreen(context),
             style: FilledButton.styleFrom(
               backgroundColor: _brandOrange,
               foregroundColor: Colors.white,
@@ -2446,7 +2970,13 @@ class _SettingsTile extends StatelessWidget {
 }
 
 class _PhotoPickerMock extends StatefulWidget {
-  const _PhotoPickerMock();
+  const _PhotoPickerMock({
+    required this.onChanged,
+    this.initialPhotoUrls = const [],
+  });
+
+  final ValueChanged<List<XFile>> onChanged;
+  final List<String> initialPhotoUrls;
 
   @override
   State<_PhotoPickerMock> createState() => _PhotoPickerMockState();
@@ -2455,6 +2985,7 @@ class _PhotoPickerMock extends StatefulWidget {
 class _PhotoPickerMockState extends State<_PhotoPickerMock> {
   final ImagePicker _picker = ImagePicker();
   final List<Uint8List> _photos = [];
+  final List<XFile> _pickedFiles = [];
 
   Future<void> _pickPhotos() async {
     final remaining = 5 - _photos.length;
@@ -2473,6 +3004,8 @@ class _PhotoPickerMockState extends State<_PhotoPickerMock> {
 
     if (!mounted) return;
     setState(() => _photos.addAll(nextPhotos));
+    _pickedFiles.addAll(picked.take(remaining));
+    widget.onChanged(_pickedFiles);
   }
 
   @override
@@ -2497,7 +3030,7 @@ class _PhotoPickerMockState extends State<_PhotoPickerMock> {
                   children: [
                     const Icon(Icons.camera_alt_outlined),
                     const SizedBox(height: 4),
-                    Text('${_photos.length}/5'),
+                    Text('${widget.initialPhotoUrls.length + _photos.length}/5'),
                   ],
                 ),
               ),
@@ -2511,47 +3044,73 @@ class _PhotoPickerMockState extends State<_PhotoPickerMock> {
             ),
           ],
         ),
-        if (_photos.isNotEmpty) ...[
+        if (widget.initialPhotoUrls.isNotEmpty || _photos.isNotEmpty) ...[
           const SizedBox(height: 12),
           SizedBox(
             height: 76,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemBuilder: (context, index) => Stack(
-                children: [
-                  ClipRRect(
+              itemBuilder: (context, index) {
+                if (index < widget.initialPhotoUrls.length) {
+                  final imageUrl = widget.initialPhotoUrls[index];
+                  return ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.memory(
-                      _photos[index],
+                    child: Image.network(
+                      imageUrl,
                       width: 76,
                       height: 76,
                       fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        width: 76,
+                        height: 76,
+                        color: const Color(0xFFEDEDED),
+                        child: const Icon(Icons.image_not_supported_outlined),
+                      ),
                     ),
-                  ),
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: InkWell(
-                      onTap: () => setState(() => _photos.removeAt(index)),
-                      child: Container(
-                        width: 22,
-                        height: 22,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.6),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                          size: 15,
+                  );
+                }
+
+                final localIndex = index - widget.initialPhotoUrls.length;
+                return Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        _photos[localIndex],
+                        width: 76,
+                        height: 76,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() => _photos.removeAt(localIndex));
+                          _pickedFiles.removeAt(localIndex);
+                          widget.onChanged(_pickedFiles);
+                        },
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 15,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                );
+              },
               separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemCount: _photos.length,
+              itemCount: widget.initialPhotoUrls.length + _photos.length,
             ),
           ),
         ],
@@ -2705,6 +3264,10 @@ class _UserInfoSections extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 18),
+            _MySellingListingsSection(userId: user!.uid),
+            const SizedBox(height: 18),
+            _MyFavoritesListSection(userId: user!.uid),
+            const SizedBox(height: 18),
             _ProfileSection(
               title: '선택 정보',
               rows: [
@@ -2715,6 +3278,381 @@ class _UserInfoSections extends StatelessWidget {
               ],
             ),
           ],
+        );
+      },
+    );
+  }
+}
+
+MarketListing? _findSampleListingById(String id) {
+  for (final listing in sampleListings) {
+    if (listing.id == id) return listing;
+  }
+  return null;
+}
+
+Future<MarketListing?> _findListingById(String id) async {
+  final sample = _findSampleListingById(id);
+  if (sample != null) return sample;
+
+  if (_firebaseUnavailableMessage() != null) return null;
+
+  try {
+    final doc = await FirebaseFirestore.instance
+        .collection('listings')
+        .doc(id)
+        .get()
+        .timeout(_firebaseRequestTimeout);
+    if (!doc.exists || doc.data() == null) return null;
+    return _listingFromFirestoreData(doc.id, doc.data()!);
+  } catch (error, stackTrace) {
+    debugPrint('[ListingLookup] failed for $id: $error');
+    debugPrintStack(stackTrace: stackTrace);
+    return null;
+  }
+}
+
+Future<List<MarketListing>> _loadListingsByIds(List<String> ids) async {
+  final listings = <MarketListing>[];
+  for (final id in ids) {
+    final listing = await _findListingById(id);
+    if (listing != null) listings.add(listing);
+  }
+  return listings;
+}
+
+Future<void> _toggleFavorite(BuildContext context, String listingId) async {
+  final user = _currentUserOrNull();
+  if (user == null) {
+    await _openLoginScreen(context);
+    return;
+  }
+
+  final unavailableMessage = _firebaseUnavailableMessage();
+  if (unavailableMessage != null) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(unavailableMessage)));
+    }
+    return;
+  }
+
+  final ref = FirebaseFirestore.instance
+      .collection('users')
+      .doc(user.uid)
+      .collection('favorites')
+      .doc(listingId);
+
+  try {
+    final doc = await ref.get().timeout(_firebaseRequestTimeout);
+    if (doc.exists) {
+      await ref.delete().timeout(_firebaseRequestTimeout);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('찜 목록에서 제거했습니다.')));
+      }
+    } else {
+      await ref.set({
+        'listingId': listingId,
+        'createdAt': FieldValue.serverTimestamp(),
+      }).timeout(_firebaseRequestTimeout);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('찜 목록에 추가했습니다.')));
+      }
+    }
+  } catch (error, stackTrace) {
+    debugPrint('[Favorite] toggle failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('찜하기 처리에 실패했습니다.')));
+    }
+  }
+}
+
+class _FavoriteBottomButton extends StatelessWidget {
+  const _FavoriteBottomButton({required this.listingId});
+
+  final String listingId;
+
+  @override
+  Widget build(BuildContext context) {
+    final user = _currentUserOrNull();
+
+    Widget buildButton({required bool isFavorite}) {
+      return OutlinedButton.icon(
+        onPressed: () => _toggleFavorite(context, listingId),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: isFavorite ? _brandOrange : _ink,
+          side: BorderSide(
+            color: isFavorite ? _brandOrange : const Color(0xFFEDEDED),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        ),
+        icon: Icon(
+          isFavorite ? Icons.favorite : Icons.favorite_border,
+          size: 18,
+        ),
+        label: Text(isFavorite ? '찜함' : '찜하기'),
+      );
+    }
+
+    if (user == null || _firebaseUnavailableMessage() != null) {
+      return buildButton(isFavorite: false);
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorites')
+          .doc(listingId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final isFavorite = snapshot.data?.exists ?? false;
+        return buildButton(isFavorite: isFavorite);
+      },
+    );
+  }
+}
+
+class _MyPageListingSection extends StatelessWidget {
+  const _MyPageListingSection({
+    required this.title,
+    required this.listings,
+    this.emptyText = '표시할 물품이 없습니다.',
+    this.isLoading = false,
+  });
+
+  final String title;
+  final List<MarketListing> listings;
+  final String emptyText;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFEDEDED)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: isLoading
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : listings.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    emptyText,
+                    style: const TextStyle(color: _muted),
+                  ),
+                )
+              : Column(
+                  children: [
+                    for (var i = 0; i < listings.length; i++) ...[
+                      if (i > 0)
+                        const Divider(height: 1, color: Color(0xFFEDEDED)),
+                      _MyPageListingTile(listing: listings[i]),
+                    ],
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MyPageListingTile extends StatelessWidget {
+  const _MyPageListingTile({required this.listing});
+
+  final MarketListing listing;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ListingDetailScreen(listing: listing),
+        ),
+      ),
+      leading: Container(
+  width: 44,
+  height: 44,
+  decoration: BoxDecoration(
+    color: listing.color,
+    borderRadius: BorderRadius.circular(6),
+  ),
+  child: listing.photoUrls.isNotEmpty
+      ? ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: Image.network(
+            listing.photoUrls.first,
+            width: 44,
+            height: 44,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) =>
+                Icon(listing.icon, color: Colors.white, size: 22),
+          ),
+        )
+      : Icon(listing.icon, color: Colors.white, size: 22),
+),
+      title: Text(
+        listing.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      subtitle: Text(
+        '${listing.price} · ${listing.place}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: _muted, fontSize: 12),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: _muted),
+    );
+  }
+}
+
+class _MySellingListingsSection extends StatelessWidget {
+  const _MySellingListingsSection({required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_firebaseUnavailableMessage() != null) {
+      return const _MyPageListingSection(
+        title: '판매중인 물품 목록',
+        listings: [],
+        emptyText: 'Firebase 연결 후 등록한 물품을 확인할 수 있습니다.',
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      // Keep query index-light: sellerUid filter only.
+      stream: FirebaseFirestore.instance
+          .collection('listings')
+          .where('sellerUid', isEqualTo: userId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _MyPageListingSection(
+            title: '판매중인 물품 목록',
+            listings: [],
+            isLoading: true,
+          );
+        }
+
+        if (snapshot.hasError) {
+          debugPrint('[MySellingListings] ${snapshot.error}');
+          return _MyPageListingSection(
+            title: '판매중인 물품 목록',
+            listings: const [],
+            emptyText: '등록한 물품을 불러오지 못했습니다. (${snapshot.error})',
+          );
+        }
+
+        final listings = (snapshot.data?.docs.map(_listingFromDoc).toList() ??
+                <MarketListing>[])
+            .where((listing) => listing.status != 'sold')
+            .toList();
+
+        return _MyPageListingSection(
+          title: '판매중인 물품 목록',
+          listings: listings,
+          emptyText: '등록한 물품이 없습니다.',
+        );
+      },
+    );
+  }
+}
+
+class _MyFavoritesListSection extends StatelessWidget {
+  const _MyFavoritesListSection({required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_firebaseUnavailableMessage() != null) {
+      return const _MyPageListingSection(
+        title: '내가 찜한 리스트',
+        listings: [],
+        emptyText: 'Firebase 연결 후 찜한 물품을 확인할 수 있습니다.',
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('favorites')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _MyPageListingSection(
+            title: '내가 찜한 리스트',
+            listings: [],
+            isLoading: true,
+          );
+        }
+
+        if (snapshot.hasError) {
+          debugPrint('[MyFavoritesList] ${snapshot.error}');
+          return const _MyPageListingSection(
+            title: '내가 찜한 리스트',
+            listings: [],
+            emptyText: '찜한 물품을 불러오지 못했습니다.',
+          );
+        }
+
+        final favoriteIds =
+            snapshot.data?.docs.map((doc) => doc.id).toList() ?? [];
+
+        if (favoriteIds.isEmpty) {
+          return const _MyPageListingSection(
+            title: '내가 찜한 리스트',
+            listings: [],
+            emptyText: '찜한 물품이 없습니다.',
+          );
+        }
+
+        return FutureBuilder<List<MarketListing>>(
+          key: ValueKey(favoriteIds.join(',')),
+          future: _loadListingsByIds(favoriteIds),
+          builder: (context, listingSnapshot) {
+            if (listingSnapshot.connectionState == ConnectionState.waiting) {
+              return const _MyPageListingSection(
+                title: '내가 찜한 리스트',
+                listings: [],
+                isLoading: true,
+              );
+            }
+
+            final listings = listingSnapshot.data ?? [];
+
+            return _MyPageListingSection(
+              title: '내가 찜한 리스트',
+              listings: listings,
+              emptyText: '찜한 물품 정보를 찾을 수 없습니다.',
+            );
+          },
         );
       },
     );
@@ -2985,6 +3923,116 @@ String _stringValue(Object? value, String fallback) {
   return text.isEmpty ? fallback : text;
 }
 
+List<String> _stringListValue(Object? value) {
+  if (value is! List) return const [];
+  final result = <String>[];
+  for (final item in value) {
+    final text = item?.toString().trim() ?? '';
+    if (text.isNotEmpty) result.add(text);
+  }
+  return result;
+}
+
+final _sellerNicknameCache = <String, String>{};
+
+bool _needsSellerNicknameLookup(MarketListing listing) {
+  final nickname = listing.sellerNickname.trim();
+  return nickname.isEmpty || nickname == '익명';
+}
+
+Future<String> _fetchNicknameForUid(
+  String uid, {
+  String? displayName,
+  String? email,
+  String fallback = '익명',
+}) async {
+  if (displayName?.trim().isNotEmpty == true) {
+    final name = displayName!.trim();
+    _sellerNicknameCache[uid] = name;
+    return name;
+  }
+
+  final cached = _sellerNicknameCache[uid];
+  if (cached != null && cached.isNotEmpty) {
+    return cached;
+  }
+
+  if (_firebaseUnavailableMessage() != null) {
+    return fallback;
+  }
+
+  try {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get()
+        .timeout(_firebaseRequestTimeout);
+    final data = doc.data();
+    final nickname = _stringValue(data?['nickname'], '');
+    if (nickname.isNotEmpty) {
+      _sellerNicknameCache[uid] = nickname;
+      return nickname;
+    }
+    final name = _stringValue(data?['name'], '');
+    if (name.isNotEmpty) {
+      _sellerNicknameCache[uid] = name;
+      return name;
+    }
+  } catch (error, stackTrace) {
+    debugPrint('[SellerNickname] lookup failed for $uid: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
+  if (email?.trim().isNotEmpty == true) {
+    return email!.trim();
+  }
+  return fallback;
+}
+
+Future<String> _resolveSellerNickname(MarketListing listing) async {
+  if (!_needsSellerNicknameLookup(listing)) {
+    return listing.sellerNickname;
+  }
+
+  final sellerUid = listing.sellerUid?.trim();
+  if (sellerUid == null || sellerUid.isEmpty) {
+    return listing.sellerNickname;
+  }
+
+  return _fetchNicknameForUid(
+    sellerUid,
+    fallback: listing.sellerNickname,
+  );
+}
+
+class _SellerTradeLine extends StatelessWidget {
+  const _SellerTradeLine({required this.listing});
+
+  final MarketListing listing;
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(color: _muted, fontSize: 12);
+    final text = '${listing.sellerNickname} · 거래 ${listing.tradeCount}회';
+
+    if (!_needsSellerNicknameLookup(listing) ||
+        listing.sellerUid?.trim().isNotEmpty != true) {
+      return Text(text, style: style);
+    }
+
+    return FutureBuilder<String>(
+      future: _resolveSellerNickname(listing),
+      builder: (context, snapshot) {
+        final nickname = snapshot.data ?? listing.sellerNickname;
+        return Text(
+          '$nickname · 거래 ${listing.tradeCount}회',
+          style: style,
+        );
+      },
+    );
+  }
+}
+
 ListingType _listingTypeFromValue(Object? value) {
   final name = value?.toString();
   return ListingType.values.firstWhere(
@@ -2993,14 +4041,18 @@ ListingType _listingTypeFromValue(Object? value) {
   );
 }
 
-MarketListing _listingFromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
-  final data = doc.data();
+MarketListing _listingFromFirestoreData(
+  String id,
+  Map<String, dynamic> data,
+) {
   final type = _listingTypeFromValue(data['type']);
   final place = _stringValue(data['place'], '위치 미입력');
   final seller = _stringValue(data['sellerNickname'], '익명');
+  final sellerUid = _stringValue(data['sellerUid'], '');
+  final photoUrls = _stringListValue(data['photoUrls']);
 
   return MarketListing(
-    id: doc.id,
+    id: id,
     type: type,
     title: _stringValue(data['title'], '제목 없음'),
     category: _stringValue(data['category'], type.label),
@@ -3009,6 +4061,22 @@ MarketListing _listingFromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     placeNote: place,
     postedAgo: '방금 전',
     sellerNickname: seller,
+    sellerUid: sellerUid.isEmpty ? null : sellerUid,
+    status: _stringValue(data['status'], 'active'),
+    itemName: () {
+      final name = _stringValue(data['itemName'], '');
+      return name.isEmpty ? null : name;
+    }(),
+    currencyDirection: () {
+      final value = data['currencyDirection']?.toString().trim();
+      return value == null || value.isEmpty ? null : value;
+    }(),
+    exchangeRate: () {
+      final value = data['exchangeRate']?.toString().trim();
+      return value == null || value.isEmpty ? null : value;
+    }(),
+    photoUrls: photoUrls,
+    photoCount: photoUrls.isNotEmpty ? photoUrls.length : 1,
     tradeCount: 0,
     description: _stringValue(data['description'], ''),
     icon: type.icon,
@@ -3021,6 +4089,10 @@ MarketListing _listingFromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
         ? null
         : _stringValue(data['contact'], ''),
   );
+}
+
+MarketListing _listingFromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+  return _listingFromFirestoreData(doc.id, doc.data());
 }
 
 enum ListingType {
@@ -3045,6 +4117,12 @@ class MarketListing {
     required this.placeNote,
     required this.postedAgo,
     required this.sellerNickname,
+    this.sellerUid,
+    this.status = 'active',
+    this.itemName,
+    this.currencyDirection,
+    this.exchangeRate,
+    this.photoUrls = const [],
     required this.tradeCount,
     required this.description,
     required this.icon,
@@ -3065,6 +4143,12 @@ class MarketListing {
   final String placeNote;
   final String postedAgo;
   final String sellerNickname;
+  final String? sellerUid;
+  final String status;
+  final String? itemName;
+  final String? currencyDirection;
+  final String? exchangeRate;
+  final List<String> photoUrls;
   final int tradeCount;
   final String description;
   final IconData icon;

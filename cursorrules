@@ -1,0 +1,141 @@
+# CURSOR RULES — Nproject
+# Flutter/Firebase | repo: github.com/anidr2am-cell/nproject | local: C:\Nproject
+# Firebase project: nproject-302c9 | Bundle ID: com.nproject.nproject
+
+## ROLE
+시니어 Flutter 개발자. 한국어로 응답. 코드에는 한국어 주석 사용.
+
+---
+
+## RESPONSE STYLE
+- 코드 먼저, 설명은 꼭 필요한 것만 1-2줄
+- 변경된 부분만 제시 (전체 파일 재출력 금지)
+- 불필요한 인사말/마무리 멘트 금지
+- 확신 없으면 솔직히 말할 것
+
+---
+
+## 프로젝트 구조 (현재 단일 파일 → 분리 목표)
+
+### 현재 상태
+lib/main.dart 에 모든 코드 집중 (약 3,200줄)
+
+### 분리 목표 구조
+```
+lib/
+  main.dart              # 앱 진입점 + Firebase 초기화만
+  core/
+    constants.dart       # _brandOrange, _ink, _muted 등 색상/상수
+    firebase_helper.dart # _firebaseMessage, _firebaseUnavailableMessage 등
+    theme.dart           # ThemeData
+  models/
+    market_listing.dart  # MarketListing, ListingType, sampleListings
+  screens/
+    home_screen.dart
+    category_screen.dart
+    post_listing_screen.dart
+    my_page_screen.dart
+    listing_detail_screen.dart
+    auth_screen.dart
+    settings_screen.dart
+  widgets/
+    listing_tile.dart
+    type_pill.dart
+    notice_box.dart
+    # 기타 공용 위젯
+```
+
+### 파일 분리 시 주의
+- `_brandOrange`, `_ink`, `_muted`, `_surface`, `_warning` → core/constants.dart 이동
+- `_firebaseMessage()`, `_firebaseUnavailableMessage()`, `_authStateStream()`, `_currentUserOrNull()` → core/firebase_helper.dart 이동
+- `MarketListing`, `ListingType`, `sampleListings`, `categories` → models/market_listing.dart 이동
+
+---
+
+## 핵심 도메인
+
+### 거래 타입 (ListingType enum)
+- `used` → 중고거래 (보라 #6750A4)
+- `request` → 해주세요 (코랄 #E16A54)
+- `currency` → 화폐 교환 (파랑 #2F80ED)
+
+### 브랜드 컬러
+- Primary: `_brandOrange` = `Color(0xFFFF6F0F)`
+- 배경: `_surface` = `Color(0xFFF7F8FA)`
+- 텍스트 muted: `_muted` = `Color(0xFF767676)`
+
+### Firestore 컬렉션
+- `listings` : 매물 목록 (orderBy: createdAt desc)
+  - fields: title, type, category, price, place, sellerNickname, description, contact, createdAt
+
+### 화면 구조 (BottomNav 4탭)
+- 0: HomeScreen (목록 + 실시간 Firestore 스트림)
+- 1: CategoryScreen
+- 2: PostListingScreen (글쓰기 - UsedListingForm / DeliveryRequestForm / CurrencyExchangeForm)
+- 3: MyPageScreen
+
+---
+
+## FLUTTER 규칙
+
+### 상태관리
+- 현재: StatefulWidget + setState (로컬 UI)
+- 전역 상태 필요 시: Provider 우선 검토
+- StreamBuilder로 Firestore 실시간 연동
+
+### 코드 규칙
+- const 생성자 최대한 사용
+- null safety 철저히 준수
+- async/await 사용, .then() 체이닝 지양
+- BuildContext를 async gap 이후 사용 금지 (`if (!mounted) return;`)
+- 위젯 100줄 초과 시 별도 파일로 분리
+- print() 금지 → debugPrint() 사용
+
+### 네비게이션
+- Navigator.push + MaterialPageRoute (현재 방식 유지)
+- Hero 애니메이션: listing.id를 tag로 사용 중 (ListingTile ↔ ListingDetailScreen)
+
+---
+
+## FIREBASE 규칙
+
+### Firebase 초기화 패턴 (현재 방식 유지)
+```dart
+// _firebaseReady, _firebaseInitMessage 전역 변수로 상태 관리
+// _firebaseUnavailableMessage() null 체크 후 Firebase 접근
+if (_firebaseUnavailableMessage() != null) return;
+```
+
+### Auth 에러 처리 (기존 _firebaseMessage 활용)
+- invalid-email / email-already-in-use / weak-password
+- user-not-found / wrong-password / invalid-credential
+- permission-denied / unavailable / failed-precondition
+
+### Firestore
+- 리스너는 dispose에서 반드시 cancel
+- 쿼리 결과 + sampleListings 병합 패턴 유지 (firestoreListings + sampleListings)
+- `_listingFromDoc()` 활용해서 QueryDocumentSnapshot → MarketListing 변환
+
+### 보안
+- firebase_options.dart 는 .gitignore에 추가 권장
+- API 키 하드코딩 추가 금지
+
+---
+
+## GIT 커밋 메시지
+```
+feat: 새 기능
+fix: 버그 수정
+refactor: 리팩토링 (주로 파일 분리)
+style: UI 변경
+chore: 설정/의존성
+```
+브랜치: main(배포) / develop / feature/{기능명}
+
+---
+
+## 요청 해석
+- "만들어줘" → 기존 코드 스타일 맞춰서 파일 전체 생성
+- "고쳐줘" → 변경 부분만 (old → new 스타일)
+- "분리해줘" → 위 목표 구조 기준으로 파일 분리
+- 애매하면 구현 전 1줄로 확인
