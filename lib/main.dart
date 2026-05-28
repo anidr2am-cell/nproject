@@ -307,10 +307,18 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({required this.onWrite, super.key});
 
   final VoidCallback onWrite;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _showOnlyActive = false;
+  String? _selectedCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -372,24 +380,41 @@ class HomeScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _QuickWritePanel(onWrite: onWrite),
+                  _QuickWritePanel(onWrite: widget.onWrite),
                   const SizedBox(height: 18),
                   SizedBox(
-                    height: 42,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
+                        height: 42,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
                       itemBuilder: (context, index) {
                         final category = categories[index];
                         return FilterChip(
-                          selected: index == 0,
-                          showCheckmark: false,
-                          label: Text(category),
-                          onSelected: (_) {},
-                        );
+  selected: _selectedCategory == category || (index == 0 && _selectedCategory == null),
+  showCheckmark: false,
+  label: Text(category),
+  onSelected: (_) {
+    setState(() {
+      _selectedCategory = category == categories[0] ? null : category;
+    });
+  },
+);
                       },
                       separatorBuilder: (_, _) => const SizedBox(width: 8),
                       itemCount: categories.length,
                     ),
+                  ),
+                const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _showOnlyActive,
+                        activeColor: _brandOrange,
+                        onChanged: (value) =>
+                            setState(() => _showOnlyActive = value ?? false),
+                      ),
+                      const Text('판매중인 물품만 보기'),
+                    ],
                   ),
                 ],
               ),
@@ -406,7 +431,13 @@ class HomeScreen extends StatelessWidget {
               final firestoreListings = snapshot.hasData
                   ? snapshot.data!.docs.map(_listingFromDoc).toList()
                   : <MarketListing>[];
-              final listings = [...firestoreListings, ...sampleListings];
+              final allListings = [...firestoreListings, ...sampleListings];
+              var listings = _showOnlyActive
+                  ? allListings.where((l) => l.status == 'active').toList()
+                  : allListings;
+              if (_selectedCategory != null) {
+                listings = listings.where((l) => l.category == _selectedCategory).toList();
+          }
 
               return SliverMainAxisGroup(
                 slivers: [
@@ -450,7 +481,7 @@ class HomeScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: _brandOrange,
         foregroundColor: Colors.white,
-        onPressed: onWrite,
+        onPressed: widget.onWrite,
         icon: const Icon(Icons.edit_outlined),
         label: const Text('글쓰기'),
       ),
@@ -607,8 +638,22 @@ class ListingTile extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (listing.type != ListingType.used)
-                        _TypePill(text: listing.type.label),
+                      
+                      Column(
+  crossAxisAlignment: CrossAxisAlignment.end,
+  children: [
+    _TypePill(text: listing.type.label),
+    const SizedBox(height: 4),
+    Text(
+      listing.status == 'sold' ? '판매완료' : listing.status == 'reserved' ? '거래 예약중' : '판매중',
+style: TextStyle(
+  fontSize: 11,
+  fontWeight: FontWeight.w700,
+  color: listing.status == 'sold' ? _muted : listing.status == 'reserved' ? Colors.blue : _brandOrange,
+),
+    ),
+  ],
+),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -667,7 +712,11 @@ bool _canManageFirestoreListing(MarketListing listing) {
 }
 
 String _saleStatusLabel(String status) {
-  return status == 'sold' ? '판매완료' : '판매중';
+  return switch (status) {
+    'sold' => '판매완료',
+    'reserved' => '거래 예약중',
+    _ => '판매중',
+  };
 }
 
 Future<void> _updateListingSaleStatus(
@@ -987,7 +1036,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     style: const TextStyle(fontSize: 16, height: 1.5),
                   ),
                   const SizedBox(height: 20),
-                  _TradeLocationText(value: listing.placeNote),
+                  _TradeLocationText(value: listing.price, label: '가격'),
+                  const SizedBox(height: 12),
+                  _TradeLocationText(value: listing.placeNote, label: '거래 희망 장소'),
                   if (listing.contactNote != null)
                     _InfoRow(
                       icon: Icons.alternate_email,
@@ -1010,15 +1061,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           child: isOwner
               ? Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        listing.price,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
+                  const Spacer(),  
                     OutlinedButton(
                       onPressed: _openEditScreen,
                       style: OutlinedButton.styleFrom(
@@ -1052,16 +1095,20 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
-                          value: _saleStatus == 'sold' ? 'sold' : 'active',
+                          value: _saleStatus == 'sold' ? 'sold' : _saleStatus == 'reserved' ? 'reserved' : 'active',
                           items: const [
                             DropdownMenuItem(
-                              value: 'active',
-                              child: Text('판매중'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'sold',
-                              child: Text('판매완료'),
-                            ),
+  value: 'active',
+  child: Text('판매중'),
+),
+DropdownMenuItem(
+  value: 'reserved',
+  child: Text('거래 예약중'),
+),
+DropdownMenuItem(
+  value: 'sold',
+  child: Text('판매완료'),
+),
                           ],
                           onChanged: (value) async {
                             if (value == null || value == _saleStatus) return;
@@ -1080,29 +1127,28 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 )
               : Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        listing.price,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
+                    const Spacer(),
                     _FavoriteBottomButton(listingId: listing.id),
                     const SizedBox(width: 8),
                     FilledButton(
-                      onPressed: () => _showContactInfo(context, listing),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _brandOrange,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                      ),
-                      child: Text(listing.type.label),
-                    ),
+  onPressed: () => _showContactInfo(context, listing),
+  style: FilledButton.styleFrom(
+    backgroundColor: _brandOrange,
+    foregroundColor: Colors.white,
+    padding: const EdgeInsets.symmetric(
+      horizontal: 20,
+      vertical: 14,
+    ),
+  ),
+  child: const Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(Icons.chat_bubble_outline, size: 18),
+      SizedBox(width: 8),
+      Text('메시지 보내기'),
+    ],
+  ),
+),
                   ],
                 ),
         ),
@@ -1260,15 +1306,15 @@ void _showSellerProfile(BuildContext context, MarketListing listing) {
               ),
             const SizedBox(height: 10),
             FilledButton.icon(
-              onPressed: () => _showContactInfo(context, listing),
-              style: FilledButton.styleFrom(
-                backgroundColor: _brandOrange,
+                 onPressed: () => _showContactInfo(context, listing),
+                 style: FilledButton.styleFrom(
+                 backgroundColor: _brandOrange,
                 foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(46),
-              ),
-              icon: const Icon(Icons.alternate_email),
-              label: const Text('연락처 보기'),
-            ),
+  ),
+  icon: const Icon(Icons.chat_bubble_outline),
+  label: const Text('메시지 보내기'),
+),
           ],
         ),
       ),
@@ -1307,15 +1353,22 @@ void _showContactInfo(BuildContext context, MarketListing listing) {
   );
 }
 
-class CategoryScreen extends StatelessWidget {
+class CategoryScreen extends StatefulWidget {
   const CategoryScreen({super.key});
+
+  @override
+  State<CategoryScreen> createState() => _CategoryScreenState();
+}
+
+class _CategoryScreenState extends State<CategoryScreen> {
+  String? _selectedCategory;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('카테고리')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         children: [
           const Text(
             '중고거래',
@@ -1325,17 +1378,26 @@ class CategoryScreen extends StatelessWidget {
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: categories
-                .map(
-                  (category) => ActionChip(
-                    label: Text(category),
-                    onPressed: () {},
-                    avatar: const Icon(Icons.sell_outlined, size: 18),
-                  ),
-                )
-                .toList(),
+            children: categories.map((category) {
+              final isSelected = _selectedCategory == category;
+              return ActionChip(
+                label: Text(category),
+                avatar: const Icon(Icons.sell_outlined, size: 18),
+                backgroundColor: isSelected
+                    ? _brandOrange.withValues(alpha: 0.12)
+                    : null,
+                labelStyle: TextStyle(
+                  color: isSelected ? _brandOrange : null,
+                  fontWeight: isSelected ? FontWeight.w900 : null,
+                ),
+                onPressed: () => setState(() {
+                  _selectedCategory =
+                      _selectedCategory == category ? null : category;
+                }),
+              );
+            }).toList(),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 24),
           const Text(
             'Nproject 특화 게시판',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
@@ -1351,6 +1413,75 @@ class CategoryScreen extends StatelessWidget {
             title: '화폐 교환',
             body: '여행 후 남은 소액의 바트와 원화를 사용자끼리 교환하는 게시판입니다.',
           ),
+          if (_selectedCategory != null) ...[
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Text(
+                  _selectedCategory!,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => setState(() => _selectedCategory = null),
+                  child: const Text('전체보기'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _firebaseUnavailableMessage() == null
+                  ? FirebaseFirestore.instance
+                        .collection('listings')
+                        .where('category', isEqualTo: _selectedCategory)
+                        .orderBy('createdAt', descending: true)
+                        .snapshots()
+                  : null,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final listings = snapshot.hasData
+                    ? snapshot.data!.docs.map(_listingFromDoc).toList()
+                    : <MarketListing>[];
+                if (listings.isEmpty) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Text(
+                        '해당 카테고리에 등록된 물품이 없습니다.',
+                        style: TextStyle(color: _muted),
+                      ),
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: listings.length,
+                  separatorBuilder: (_, _) => const Divider(
+                    height: 1,
+                    indent: 92,
+                    color: Color(0xFFEDEDED),
+                  ),
+                  itemBuilder: (context, index) {
+                    final listing = listings[index];
+                    return ListingTile(
+                      listing: listing,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ListingDetailScreen(listing: listing),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ],
         ],
       ),
     );
@@ -2480,7 +2611,58 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
+void _showContactSupport(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '고객센터',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '아래 채널로 문의해주세요.',
+              style: TextStyle(color: _muted),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.chat_bubble_outline, color: _brandOrange),
+              title: const Text('카카오톡 문의'),
+              subtitle: const Text('카카오톡 ID: your_kakao_id'),
+              onTap: () async {
+                final uri = Uri.parse('https://open.kakao.com/o/your_open_chat_link');
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.chat_outlined, color: _brandOrange),
+              title: const Text('라인 문의'),
+              subtitle: const Text('라인 ID: your_line_id'),
+              onTap: () async {
+                final uri = Uri.parse('https://line.me/ti/p/your_line_id');
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -2589,8 +2771,14 @@ class SettingsScreen extends StatelessWidget {
             title: '공지사항',
             subtitle: '운영자가 게시한 공지사항',
             onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const NoticesScreen())),
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const NoticesScreen())),
+        ),
+          _SettingsTile(
+            icon: Icons.headset_mic_outlined,
+            title: '고객센터',
+            subtitle: '카카오톡 또는 라인으로 문의',
+            onTap: () => _showContactSupport(context),
           ),
           _SettingsTile(
             icon: Icons.language,
@@ -3863,9 +4051,10 @@ class _InfoRow extends StatelessWidget {
 }
 
 class _TradeLocationText extends StatelessWidget {
-  const _TradeLocationText({required this.value});
+  const _TradeLocationText({required this.value, this.label = '거래 희망 장소'});
 
   final String value;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -3880,7 +4069,7 @@ class _TradeLocationText extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('거래 희망 장소', style: TextStyle(color: _muted)),
+          Text(label, style: TextStyle(color: _muted)),
           const SizedBox(height: 5),
           Text(
             value,
