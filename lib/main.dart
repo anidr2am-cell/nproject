@@ -319,6 +319,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _showOnlyActive = false;
   String? _selectedCategory;
+  ListingType? _selectedType;
 
   @override
   Widget build(BuildContext context) {
@@ -380,7 +381,13 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _QuickWritePanel(onWrite: widget.onWrite),
+                  _QuickActionPanel(
+  selectedType: _selectedType,
+  onTypeSelected: (type) => setState(() {
+    _selectedType = _selectedType == type ? null : type;
+  }),
+  onWrite: widget.onWrite,
+),
                   const SizedBox(height: 18),
                   SizedBox(
                         height: 42,
@@ -433,11 +440,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   : <MarketListing>[];
               final allListings = [...firestoreListings, ...sampleListings];
               var listings = _showOnlyActive
-                  ? allListings.where((l) => l.status == 'active').toList()
-                  : allListings;
-              if (_selectedCategory != null) {
-                listings = listings.where((l) => l.category == _selectedCategory).toList();
-          }
+    ? allListings.where((l) => l.status == 'active').toList()
+    : allListings;
+if (_selectedCategory != null) {
+  listings = listings.where((l) => l.category == _selectedCategory).toList();
+}
+if (_selectedType != null) {
+  listings = listings.where((l) => l.type == _selectedType).toList();
+}
 
               return SliverMainAxisGroup(
                 slivers: [
@@ -489,10 +499,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _QuickWritePanel extends StatelessWidget {
-  const _QuickWritePanel({required this.onWrite});
+class _QuickActionPanel extends StatelessWidget {
+  const _QuickActionPanel({
+    required this.onWrite,
+    required this.selectedType,
+    required this.onTypeSelected,
+  });
 
   final VoidCallback onWrite;
+  final ListingType? selectedType;
+  final ValueChanged<ListingType> onTypeSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -510,7 +526,8 @@ class _QuickWritePanel extends StatelessWidget {
               icon: Icons.shopping_bag_outlined,
               title: '중고거래',
               subtitle: '물건 팔기',
-              onTap: onWrite,
+              isSelected: selectedType == ListingType.used,
+              onTap: () => onTypeSelected(ListingType.used),
             ),
           ),
           const SizedBox(width: 10),
@@ -519,7 +536,8 @@ class _QuickWritePanel extends StatelessWidget {
               icon: Icons.flight_takeoff,
               title: '해주세요',
               subtitle: '배송 부탁',
-              onTap: onWrite,
+              isSelected: selectedType == ListingType.request,
+              onTap: () => onTypeSelected(ListingType.request),
             ),
           ),
           const SizedBox(width: 10),
@@ -528,7 +546,8 @@ class _QuickWritePanel extends StatelessWidget {
               icon: Icons.currency_exchange,
               title: '화폐 교환',
               subtitle: '소액 교환',
-              onTap: onWrite,
+              isSelected: selectedType == ListingType.currency,
+              onTap: () => onTypeSelected(ListingType.currency),
             ),
           ),
         ],
@@ -543,38 +562,52 @@ class _QuickAction extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.isSelected = false,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Column(
-          children: [
-            Icon(icon, color: _brandOrange, size: 26),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _muted, fontSize: 12),
-            ),
-          ],
+    return Container(
+      decoration: BoxDecoration(
+        color: isSelected ? _brandOrange : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            children: [
+              Icon(icon, color: isSelected ? Colors.white : _brandOrange, size: 26),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: isSelected ? Colors.white : _ink,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isSelected ? Colors.white70 : _muted,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
