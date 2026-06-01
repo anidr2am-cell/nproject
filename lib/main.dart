@@ -1550,8 +1550,11 @@ class _PostListingScreenState extends State<PostListingScreen> {
   final _exchangeRateController = TextEditingController();
 
   ListingType _type = ListingType.used;
-  String _category = categories.first;
-  String _currencyDirection = '바트를 원화로';
+String _category = categories.first;
+String _tradeType = 'sell';
+String _requestType = 'need';
+String _currencyTradeType = 'sell';
+String _currencyDirection = '바트를 원화로';
   bool _isSubmitting = false;
   final List<XFile> _pickedPhotos = [];
   List<String> _existingPhotoUrls = [];
@@ -1568,6 +1571,7 @@ class _PostListingScreenState extends State<PostListingScreen> {
 
   void _prefillFromListing(MarketListing listing) {
     _type = listing.type;
+    _tradeType = listing.tradeType;
     _titleController.text = listing.title;
     _nameController.text = listing.itemName ?? '';
     _priceController.text = listing.price;
@@ -1668,6 +1672,7 @@ class _PostListingScreenState extends State<PostListingScreen> {
     final payload = <String, Object?>{
       'type': _type.name,
       'typeLabel': _type.label,
+      'tradeType': _tradeType,
       'title': title,
       'itemName': name,
       'category': _type == ListingType.used ? _category : _type.label,
@@ -1856,44 +1861,123 @@ class _PostListingScreenState extends State<PostListingScreen> {
                   : (value) => setState(() => _type = value.first),
             ),
             const SizedBox(height: 18),
-            if (_type == ListingType.used)
-              _UsedListingForm(
-                titleController: _titleController,
-                itemController: _nameController,
-                priceController: _priceController,
-                placeController: _placeController,
-                descriptionController: _descriptionController,
-                category: _category,
-                onCategoryChanged: (value) => setState(() => _category = value),
-                onPhotosChanged: (files) {
-                  _pickedPhotos
-                    ..clear()
-                    ..addAll(files);
-                },
-                initialPhotoUrls: _existingPhotoUrls,
-                validator: _required,
-              ),
-            if (_type == ListingType.request)
-              _DeliveryRequestForm(
-                titleController: _titleController,
-                itemController: _nameController,
-                feeController: _priceController,
-                contactController: _contactController,
-                descriptionController: _descriptionController,
-                validator: _required,
-              ),
-            if (_type == ListingType.currency)
-              _CurrencyExchangeForm(
-                titleController: _titleController,
-                amountController: _priceController,
-                rateController: _exchangeRateController,
-                placeController: _placeController,
-                methodController: _descriptionController,
-                currencyDirection: _currencyDirection,
-                onCurrencyChanged: (value) =>
-                    setState(() => _currencyDirection = value),
-                validator: _required,
-              ),
+
+if (_type == ListingType.used) ...[
+  const _InputLabel('거래유형'),
+
+  SegmentedButton<String>(
+    segments: const [
+      ButtonSegment(
+        value: 'sell',
+        label: Text('팝니다'),
+        icon: Icon(Icons.sell_outlined),
+      ),
+      ButtonSegment(
+        value: 'buy',
+        label: Text('삽니다'),
+        icon: Icon(Icons.shopping_cart_outlined),
+      ),
+    ],
+    selected: {_tradeType},
+    onSelectionChanged: (value) {
+      setState(() {
+        _tradeType = value.first;
+      });
+    },
+  ),
+
+  const SizedBox(height: 18),
+
+  _UsedListingForm(
+    tradeType: _tradeType,
+    titleController: _titleController,
+    itemController: _nameController,
+    priceController: _priceController,
+    placeController: _placeController,
+    descriptionController: _descriptionController,
+    category: _category,
+    onCategoryChanged: (value) => setState(() => _category = value),
+    onPhotosChanged: (files) {
+      _pickedPhotos
+        ..clear()
+        ..addAll(files);
+    },
+    initialPhotoUrls: _existingPhotoUrls,
+    validator: _required,
+  ),
+],
+            if (_type == ListingType.request) ...[
+  const _InputLabel('서비스 유형'),
+
+  SegmentedButton<String>(
+    segments: const [
+      ButtonSegment(
+        value: 'need',
+        label: Text('해주세요'),
+        icon: Icon(Icons.help_outline),
+      ),
+      ButtonSegment(
+        value: 'offer',
+        label: Text('해드려요'),
+        icon: Icon(Icons.volunteer_activism_outlined),
+      ),
+    ],
+    selected: {_requestType},
+    onSelectionChanged: (value) {
+      setState(() {
+        _requestType = value.first;
+      });
+    },
+  ),
+
+  const SizedBox(height: 18),
+
+  _DeliveryRequestForm(
+    requestType: _requestType,
+    titleController: _titleController,
+    itemController: _nameController,
+    feeController: _priceController,
+    contactController: _contactController,
+    descriptionController: _descriptionController,
+    validator: _required,
+  ),
+],
+            if (_type == ListingType.currency) ...[
+  const _InputLabel('거래 방향'),
+
+  SegmentedButton<String>(
+    segments: const [
+      ButtonSegment(
+        value: 'sell',
+        label: Text('바트 판매'),
+        icon: Icon(Icons.trending_up),
+      ),
+      ButtonSegment(
+        value: 'buy',
+        label: Text('바트 구매'),
+        icon: Icon(Icons.trending_down),
+      ),
+    ],
+    selected: {_currencyTradeType},
+    onSelectionChanged: (value) {
+      setState(() {
+        _currencyTradeType = value.first;
+      });
+    },
+  ),
+
+  const SizedBox(height: 18),
+
+  _CurrencyExchangeForm(
+    tradeType: _currencyTradeType,
+    titleController: _titleController,
+    amountController: _priceController,
+    rateController: _exchangeRateController,
+    placeController: _placeController,
+    methodController: _descriptionController,
+    validator: _required,
+  ),
+],
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _isSubmitting ? null : _submitListing,
@@ -1922,6 +2006,7 @@ class _PostListingScreenState extends State<PostListingScreen> {
 
 class _UsedListingForm extends StatelessWidget {
   const _UsedListingForm({
+    required this.tradeType,
     required this.titleController,
     required this.itemController,
     required this.priceController,
@@ -1933,7 +2018,7 @@ class _UsedListingForm extends StatelessWidget {
     this.initialPhotoUrls = const [],
     required this.validator,
   });
-
+  final String tradeType;
   final TextEditingController titleController;
   final TextEditingController itemController;
   final TextEditingController priceController;
@@ -1959,22 +2044,38 @@ class _UsedListingForm extends StatelessWidget {
         TextFormField(
           controller: titleController,
           validator: validator,
-          decoration: const InputDecoration(hintText: '예: 아이폰 14 프로 판매합니다'),
+          decoration: InputDecoration(
+            hintText: tradeType == 'buy'
+              ? '예: 아이폰 15 Pro 삽니다'
+              : '예: 아이폰 14 프로 판매합니다',
+      ),
         ),
         const SizedBox(height: 18),
         const _InputLabel('제품명'),
         TextFormField(
           controller: itemController,
           validator: validator,
-          decoration: const InputDecoration(hintText: '예: 아이폰 14 프로 256GB'),
+          decoration: InputDecoration(
+            hintText: tradeType == 'buy'
+                ? '예: 원하는 모델명 입력'
+                : '예: 아이폰 14 프로 256GB',
+      ),
         ),
         const SizedBox(height: 18),
-        const _InputLabel('판매 가격'),
+       _InputLabel(
+          tradeType == 'buy'
+              ? '희망 구매 가격'
+              : '판매 가격',
+        ),
         TextFormField(
           controller: priceController,
           validator: validator,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(hintText: 'THB 또는 KRW 금액 입력'),
+          decoration: InputDecoration(
+            hintText: tradeType == 'buy'
+                ? '희망 구매 금액 입력'
+                : 'THB 또는 KRW 금액 입력',
+      ),
         ),
         const SizedBox(height: 18),
         const _InputLabel('카테고리'),
@@ -1993,8 +2094,10 @@ class _UsedListingForm extends StatelessWidget {
           validator: validator,
           minLines: 5,
           maxLines: 8,
-          decoration: const InputDecoration(
-            hintText: '상태, 구매 시기, 전달 가능 시간 등을 자세히 적어주세요.',
+          decoration: InputDecoration(
+          hintText: tradeType == 'buy'
+              ? '원하는 상태, 색상, 용량 등을 적어주세요.'
+              : '상태, 구매 시기, 전달 가능 시간 등을 자세히 적어주세요.',
             alignLabelWithHint: true,
           ),
         ),
@@ -2005,6 +2108,7 @@ class _UsedListingForm extends StatelessWidget {
 
 class _DeliveryRequestForm extends StatelessWidget {
   const _DeliveryRequestForm({
+    required this.requestType,
     required this.titleController,
     required this.itemController,
     required this.feeController,
@@ -2012,6 +2116,8 @@ class _DeliveryRequestForm extends StatelessWidget {
     required this.descriptionController,
     required this.validator,
   });
+
+  final String requestType;
 
   final TextEditingController titleController;
   final TextEditingController itemController;
@@ -2027,10 +2133,14 @@ class _DeliveryRequestForm extends StatelessWidget {
       children: [
         const _InputLabel('제목'),
         TextFormField(
-          controller: titleController,
-          validator: validator,
-          decoration: const InputDecoration(hintText: '예: 한국에서 방콕으로 영양제 부탁드려요'),
-        ),
+  controller: titleController,
+  validator: validator,
+  decoration: InputDecoration(
+    hintText: requestType == 'offer'
+        ? '예: 한국 물품 전달 가능합니다'
+        : '예: 영양제 전달 부탁드립니다',
+  ),
+),
         const SizedBox(height: 18),
         const _InputLabel('물품명'),
         TextFormField(
@@ -2039,12 +2149,20 @@ class _DeliveryRequestForm extends StatelessWidget {
           decoration: const InputDecoration(hintText: '배달 원하는 물품을 기재하세요.'),
         ),
         const SizedBox(height: 18),
-        const _InputLabel('배달 수수료'),
+        _InputLabel(
+  requestType == 'offer'
+      ? '희망 수수료'
+      : '수수료 제안',
+),
         TextFormField(
           controller: feeController,
           validator: validator,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(hintText: '수수료 제시'),
+          decoration: InputDecoration(
+  hintText: requestType == 'offer'
+      ? '예: 500 THB'
+      : '예: 700 THB',
+),
         ),
         const SizedBox(height: 18),
         const _InputLabel('카카오톡 or 라인 ID'),
@@ -2060,11 +2178,12 @@ class _DeliveryRequestForm extends StatelessWidget {
           validator: validator,
           minLines: 6,
           maxLines: 9,
-          decoration: const InputDecoration(
-            hintText:
-                '구체적인 제품 명과 색상, 크기, 무게 등을 상세히 설명해주세요. 태국 반입 금지 물품은 등록 불가합니다.',
-            alignLabelWithHint: true,
-          ),
+          decoration: InputDecoration(
+  hintText: requestType == 'offer'
+      ? '가능한 날짜, 출발지/도착지, 수하물 여유 공간 등을 적어주세요.'
+      : '부탁할 물건의 종류, 수량, 전달 희망 장소 등을 적어주세요.',
+  alignLabelWithHint: true,
+),
         ),
         const SizedBox(height: 14),
         const _NoticeBox(
@@ -2078,23 +2197,21 @@ class _DeliveryRequestForm extends StatelessWidget {
 
 class _CurrencyExchangeForm extends StatelessWidget {
   const _CurrencyExchangeForm({
+    required this.tradeType,
     required this.titleController,
     required this.amountController,
     required this.rateController,
     required this.placeController,
     required this.methodController,
-    required this.currencyDirection,
-    required this.onCurrencyChanged,
     required this.validator,
   });
 
+  final String tradeType;
   final TextEditingController titleController;
   final TextEditingController amountController;
   final TextEditingController rateController;
   final TextEditingController placeController;
   final TextEditingController methodController;
-  final String currencyDirection;
-  final ValueChanged<String> onCurrencyChanged;
   final FormFieldValidator<String> validator;
 
   @override
@@ -2106,37 +2223,70 @@ class _CurrencyExchangeForm extends StatelessWidget {
         TextFormField(
           controller: titleController,
           validator: validator,
-          decoration: const InputDecoration(hintText: '예: 남은 바트 원화로 교환 원해요'),
+        decoration: InputDecoration(
+  hintText: tradeType == 'buy'
+      ? '예: 바트 10,000 THB 구매 원합니다'
+      : '예: 바트 5,000 THB 판매합니다',
+),
         ),
         const SizedBox(height: 18),
         const _InputLabel('원하는 화폐'),
-        _CurrencyDropdown(
-          value: currencyDirection,
-          onChanged: onCurrencyChanged,
-        ),
+      
+        Container(
+  width: double.infinity,
+  padding: const EdgeInsets.symmetric(
+    horizontal: 16,
+    vertical: 16,
+  ),
+  decoration: BoxDecoration(
+    border: Border.all(color: Colors.grey),
+    borderRadius: BorderRadius.circular(12),
+  ),
+  child: Text(
+    tradeType == 'buy'
+        ? '원화를 바트로'
+        : '바트를 원화로',
+  ),
+),
+
+
         const SizedBox(height: 18),
-        const _InputLabel('금액'),
+        _InputLabel(
+  tradeType == 'buy'
+      ? '구매 희망 금액'
+      : '판매 금액',
+),
         TextFormField(
           controller: amountController,
           validator: validator,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            hintText: '예: 3,200 THB 또는 120,000 KRW',
-          ),
+          decoration: InputDecoration(
+  hintText: tradeType == 'buy'
+      ? '예: 10,000 THB'
+      : '예: 5,000 THB',
+),
         ),
         const SizedBox(height: 18),
         const _InputLabel('적용 환율'),
         TextFormField(
           controller: rateController,
           validator: validator,
-          decoration: const InputDecoration(hintText: '예: 네이버 살때'),
+          decoration: InputDecoration(
+  hintText: tradeType == 'buy'
+      ? '예: 네이버 살때 기준'
+      : '예: 네이버 팔때 기준',
+),
         ),
         const SizedBox(height: 18),
         const _InputLabel('거래 희망 장소'),
         TextFormField(
           controller: placeController,
           validator: validator,
-          decoration: const InputDecoration(hintText: '예: 방콕 한인 식당, 파타야 카페'),
+          decoration: InputDecoration(
+  hintText: tradeType == 'buy'
+      ? '예: 방콕 BTS 역 근처'
+      : '예: 파타야 터미널21 근처',
+),
         ),
         const SizedBox(height: 18),
         const _InputLabel('거래방법'),
@@ -2145,10 +2295,12 @@ class _CurrencyExchangeForm extends StatelessWidget {
           validator: validator,
           minLines: 3,
           maxLines: 5,
-          decoration: const InputDecoration(
-            hintText: '예: 한국 계좌에서 송금 후 바트 현금 수령 등',
-            alignLabelWithHint: true,
-          ),
+          decoration: InputDecoration(
+  hintText: tradeType == 'buy'
+      ? '예: 한국 계좌 이체 후 바트 현금 수령 희망'
+      : '예: 바트 현금 전달 후 한국 계좌 입금 희망',
+  alignLabelWithHint: true,
+),
         ),
         const SizedBox(height: 14),
         const _NoticeBox(
@@ -4332,6 +4484,7 @@ class MarketListing {
   const MarketListing({
     required this.id,
     required this.type,
+             this.tradeType = 'sell',
     required this.title,
     required this.category,
     required this.price,
@@ -4358,6 +4511,7 @@ class MarketListing {
 
   final String id;
   final ListingType type;
+  final String tradeType;
   final String title;
   final String category;
   final String price;
@@ -4476,4 +4630,26 @@ const sampleListings = [
     kakaoId: 'chiangmai_moon',
     previousTrades: ['소액 바트 교환 완료', '한국 계좌 이체 거래 완료'],
   ),
+  MarketListing(
+  id: 'buy-iphone15',
+  type: ListingType.used,
+  tradeType: 'buy',
+  title: '아이폰 15 Pro 256GB 삽니다',
+  category: '디지털기기',
+  price: '희망가 22,000 THB',
+  place: '방콕',
+  placeNote: '아속역 ~ 프롬퐁 가능',
+  postedAgo: '12분 전',
+  sellerNickname: '방콕라이프',
+  tradeCount: 7,
+  description:
+      '블랙 또는 네이비 색상 희망합니다. 기능 이상 없는 제품이면 생활기스는 괜찮습니다.',
+  icon: Icons.shopping_bag_outlined,
+  color: Color(0xFFEF6C00),
+  photoCount: 0,
+  previousTrades: [
+    '에어팟 프로 구매 완료',
+    '아이패드 거래 완료',
+  ],
+),
 ];
