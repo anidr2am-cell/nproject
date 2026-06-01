@@ -359,11 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {},
             icon: const Icon(Icons.search),
           ),
-          IconButton(
-            tooltip: '알림',
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none),
-          ),
+          const _NotificationIconButton(),
           IconButton(
             tooltip: '설정',
             onPressed: () => Navigator.of(
@@ -382,36 +378,40 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _QuickActionPanel(
-  selectedType: _selectedType,
-  onTypeSelected: (type) => setState(() {
-    _selectedType = _selectedType == type ? null : type;
-  }),
-  onWrite: widget.onWrite,
-),
+                    selectedType: _selectedType,
+                    onTypeSelected: (type) => setState(() {
+                      _selectedType = _selectedType == type ? null : type;
+                    }),
+                    onWrite: widget.onWrite,
+                  ),
                   const SizedBox(height: 18),
                   SizedBox(
-                        height: 42,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
+                    height: 42,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
                       itemBuilder: (context, index) {
                         final category = categories[index];
                         return FilterChip(
-  selected: _selectedCategory == category || (index == 0 && _selectedCategory == null),
-  showCheckmark: false,
-  label: Text(category),
-  onSelected: (_) {
-    setState(() {
-      _selectedCategory = category == categories[0] ? null : category;
-    });
-  },
-);
+                          selected:
+                              _selectedCategory == category ||
+                              (index == 0 && _selectedCategory == null),
+                          showCheckmark: false,
+                          label: Text(category),
+                          onSelected: (_) {
+                            setState(() {
+                              _selectedCategory = category == categories[0]
+                                  ? null
+                                  : category;
+                            });
+                          },
+                        );
                       },
                       separatorBuilder: (_, _) => const SizedBox(width: 8),
                       itemCount: categories.length,
                     ),
                   ),
-                const SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
                       Checkbox(
@@ -440,14 +440,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   : <MarketListing>[];
               final allListings = [...firestoreListings, ...sampleListings];
               var listings = _showOnlyActive
-    ? allListings.where((l) => l.status == 'active').toList()
-    : allListings;
-if (_selectedCategory != null) {
-  listings = listings.where((l) => l.category == _selectedCategory).toList();
-}
-if (_selectedType != null) {
-  listings = listings.where((l) => l.type == _selectedType).toList();
-}
+                  ? allListings.where((l) => l.status == 'active').toList()
+                  : allListings;
+              if (_selectedCategory != null) {
+                listings = listings
+                    .where((l) => l.category == _selectedCategory)
+                    .toList();
+              }
+              if (_selectedType != null) {
+                listings = listings
+                    .where((l) => l.type == _selectedType)
+                    .toList();
+              }
 
               return SliverMainAxisGroup(
                 slivers: [
@@ -496,6 +500,317 @@ if (_selectedType != null) {
         label: const Text('글쓰기'),
       ),
     );
+  }
+}
+
+class _NotificationIconButton extends StatelessWidget {
+  const _NotificationIconButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: _authStateStream(),
+      builder: (context, snapshot) {
+        final user = snapshot.data;
+        if (user == null || _firebaseUnavailableMessage() != null) {
+          return IconButton(
+            tooltip: '알림',
+            onPressed: () => _openLoginScreen(context),
+            icon: const Icon(Icons.notifications_none),
+          );
+        }
+
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('notifications')
+              .where('isRead', isEqualTo: false)
+              .snapshots(),
+          builder: (context, snapshot) {
+            final unreadCount = snapshot.data?.docs.length ?? 0;
+            return IconButton(
+              tooltip: unreadCount > 0 ? '알림 $unreadCount개' : '알림',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+              ),
+              icon: _NotificationBadge(count: unreadCount),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _NotificationBadge extends StatelessWidget {
+  const _NotificationBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.notifications_none),
+        if (count > 0)
+          Positioned(
+            right: -6,
+            top: -6,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: Colors.red.shade600,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class NotificationsScreen extends StatelessWidget {
+  const NotificationsScreen({super.key});
+
+  Future<void> _markAllAsRead(BuildContext context, String uid) async {
+    try {
+      final unread = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('notifications')
+          .where('isRead', isEqualTo: false)
+          .get()
+          .timeout(_firebaseRequestTimeout);
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in unread.docs) {
+        batch.update(doc.reference, {
+          'isRead': true,
+          'readAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit().timeout(_firebaseRequestTimeout);
+    } catch (error, stackTrace) {
+      debugPrint('[Notification] mark all failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('알림 읽음 처리에 실패했습니다.')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = _currentUserOrNull();
+    if (user == null || _firebaseUnavailableMessage() != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('알림')),
+        body: Center(
+          child: FilledButton(
+            onPressed: () => _openLoginScreen(context),
+            style: FilledButton.styleFrom(
+              backgroundColor: _brandOrange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('로그인하기'),
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('알림'),
+        actions: [
+          TextButton(
+            onPressed: () => _markAllAsRead(context, user.uid),
+            child: const Text('모두 읽음'),
+          ),
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('notifications')
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            debugPrint('[Notification] list failed: ${snapshot.error}');
+            return const Center(child: Text('알림을 불러오지 못했습니다.'));
+          }
+
+          final docs = snapshot.data?.docs ?? [];
+          if (docs.isEmpty) {
+            return const Center(
+              child: Text('아직 도착한 알림이 없습니다.', style: TextStyle(color: _muted)),
+            );
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: docs.length,
+            separatorBuilder: (_, _) =>
+                const Divider(height: 1, color: Color(0xFFEDEDED)),
+            itemBuilder: (context, index) {
+              return _NotificationTile(notification: docs[index]);
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _NotificationTile extends StatelessWidget {
+  const _NotificationTile({required this.notification});
+
+  final QueryDocumentSnapshot<Map<String, dynamic>> notification;
+
+  Future<void> _markAsRead() async {
+    final data = notification.data();
+    if (data['isRead'] == true) return;
+    await notification.reference
+        .update({'isRead': true, 'readAt': FieldValue.serverTimestamp()})
+        .timeout(_firebaseRequestTimeout);
+  }
+
+  Future<void> _openTarget(BuildContext context) async {
+    try {
+      await _markAsRead();
+    } catch (error, stackTrace) {
+      debugPrint('[Notification] mark one failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+    if (!context.mounted) return;
+
+    final data = notification.data();
+    final type = _stringValue(data['type'], '');
+    final chatRoomId = _stringValue(data['chatRoomId'], '');
+    final listingId = _stringValue(data['listingId'], '');
+
+    if (type == 'chat' && chatRoomId.isNotEmpty) {
+      await _openChatRoomFromNotification(context, chatRoomId, listingId);
+      return;
+    }
+
+    if (listingId.isNotEmpty) {
+      final listing = await _findListingById(listingId);
+      if (!context.mounted || listing == null) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ListingDetailScreen(listing: listing),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = notification.data();
+    final isRead = data['isRead'] == true;
+    final type = _stringValue(data['type'], '');
+    final icon = switch (type) {
+      'chat' => Icons.chat_bubble_outline,
+      'favorite' => Icons.favorite_border,
+      'listingStatus' => Icons.sell_outlined,
+      _ => Icons.notifications_none,
+    };
+
+    return ListTile(
+      tileColor: isRead ? Colors.white : const Color(0xFFFFF8F3),
+      leading: CircleAvatar(
+        backgroundColor: isRead ? _surface : _warning,
+        foregroundColor: isRead ? _muted : _brandOrange,
+        child: Icon(icon, size: 20),
+      ),
+      title: Text(
+        _stringValue(data['title'], '알림'),
+        style: TextStyle(
+          fontWeight: isRead ? FontWeight.w700 : FontWeight.w900,
+        ),
+      ),
+      subtitle: Text(
+        _stringValue(data['body'], ''),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: isRead
+          ? null
+          : Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: _brandOrange,
+                shape: BoxShape.circle,
+              ),
+            ),
+      onTap: () => _openTarget(context),
+    );
+  }
+}
+
+Future<void> _openChatRoomFromNotification(
+  BuildContext context,
+  String chatRoomId,
+  String listingId,
+) async {
+  try {
+    final room = await FirebaseFirestore.instance
+        .collection('chatRooms')
+        .doc(chatRoomId)
+        .get()
+        .timeout(_firebaseRequestTimeout);
+    final data = room.data();
+    if (data == null || !context.mounted) return;
+
+    final currentUid = _currentUserOrNull()?.uid;
+    final sellerUid = _stringValue(data['sellerUid'], '');
+    final sellerName = _stringValue(data['sellerNickname'], '판매자');
+    final buyerName = _stringValue(data['buyerNickname'], '구매자');
+    final otherName = currentUid == sellerUid ? buyerName : sellerName;
+    final listing = listingId.isEmpty
+        ? null
+        : await _findListingById(listingId);
+    if (!context.mounted) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatRoomScreen(
+          roomId: chatRoomId,
+          listing: listing,
+          otherUserName: otherName,
+        ),
+      ),
+    );
+  } catch (error, stackTrace) {
+    debugPrint('[Notification] open chat failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('채팅방을 열 수 없습니다.')));
+    }
   }
 }
 
@@ -585,7 +900,11 @@ class _QuickAction extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: Column(
             children: [
-              Icon(icon, color: isSelected ? Colors.white : _brandOrange, size: 26),
+              Icon(
+                icon,
+                color: isSelected ? Colors.white : _brandOrange,
+                size: 26,
+              ),
               const SizedBox(height: 8),
               Text(
                 title,
@@ -622,7 +941,9 @@ class ListingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = listing.photoUrls.isNotEmpty ? listing.photoUrls.first : null;
+    final imageUrl = listing.photoUrls.isNotEmpty
+        ? listing.photoUrls.first
+        : null;
 
     return InkWell(
       onTap: onTap,
@@ -647,6 +968,7 @@ class ListingTile extends StatelessWidget {
                         child: Image.network(
                           imageUrl,
                           fit: BoxFit.cover,
+                          webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
                           errorBuilder: (_, _, _) =>
                               Icon(listing.icon, color: Colors.white, size: 34),
                         ),
@@ -671,22 +993,30 @@ class ListingTile extends StatelessWidget {
                           ),
                         ),
                       ),
-                      
+
                       Column(
-  crossAxisAlignment: CrossAxisAlignment.end,
-  children: [
-    _TypePill(text: listing.type.label),
-    const SizedBox(height: 4),
-    Text(
-      listing.status == 'sold' ? '판매완료' : listing.status == 'reserved' ? '거래 예약중' : '판매중',
-style: TextStyle(
-  fontSize: 11,
-  fontWeight: FontWeight.w700,
-  color: listing.status == 'sold' ? _muted : listing.status == 'reserved' ? Colors.blue : _brandOrange,
-),
-    ),
-  ],
-),
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _TypePill(text: listing.type.label),
+                          const SizedBox(height: 4),
+                          Text(
+                            listing.status == 'sold'
+                                ? '판매완료'
+                                : listing.status == 'reserved'
+                                ? '거래 예약중'
+                                : '판매중',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: listing.status == 'sold'
+                                  ? _muted
+                                  : listing.status == 'reserved'
+                                  ? Colors.blue
+                                  : _brandOrange,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -735,9 +1065,7 @@ bool _isSampleListing(MarketListing listing) {
 
 bool _isMyListing(MarketListing listing) {
   final uid = _currentUserOrNull()?.uid;
-  return uid != null &&
-      listing.sellerUid != null &&
-      listing.sellerUid == uid;
+  return uid != null && listing.sellerUid != null && listing.sellerUid == uid;
 }
 
 bool _canManageFirestoreListing(MarketListing listing) {
@@ -754,7 +1082,7 @@ String _saleStatusLabel(String status) {
 
 Future<void> _updateListingSaleStatus(
   BuildContext context,
-  String listingId,
+  MarketListing listing,
   String status,
 ) async {
   final unavailableMessage = _firebaseUnavailableMessage();
@@ -770,12 +1098,12 @@ Future<void> _updateListingSaleStatus(
   try {
     await FirebaseFirestore.instance
         .collection('listings')
-        .doc(listingId)
-        .update({
-          'status': status,
-          'updatedAt': FieldValue.serverTimestamp(),
-        })
+        .doc(listing.id)
+        .update({'status': status, 'updatedAt': FieldValue.serverTimestamp()})
         .timeout(_firebaseRequestTimeout);
+    if (status == 'sold' || status == 'reserved') {
+      await _notifyFavoriteUsersOfStatusChange(listing, status);
+    }
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('상태가 ${_saleStatusLabel(status)}(으)로 변경되었습니다.')),
@@ -931,6 +1259,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       child: Image.network(
                         listing.photoUrls[index],
                         fit: BoxFit.cover,
+                        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
                         errorBuilder: (_, _, _) => Container(
                           color: Color.lerp(
                             listing.color,
@@ -1071,7 +1400,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   const SizedBox(height: 20),
                   _TradeLocationText(value: listing.price, label: '가격'),
                   const SizedBox(height: 12),
-                  _TradeLocationText(value: listing.placeNote, label: '거래 희망 장소'),
+                  _TradeLocationText(
+                    value: listing.placeNote,
+                    label: '거래 희망 장소',
+                  ),
                   if (listing.contactNote != null)
                     _InfoRow(
                       icon: Icons.alternate_email,
@@ -1094,7 +1426,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           child: isOwner
               ? Row(
                   children: [
-                  const Spacer(),  
+                    const Spacer(),
                     OutlinedButton(
                       onPressed: _openEditScreen,
                       style: OutlinedButton.styleFrom(
@@ -1128,26 +1460,30 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
-                          value: _saleStatus == 'sold' ? 'sold' : _saleStatus == 'reserved' ? 'reserved' : 'active',
+                          value: _saleStatus == 'sold'
+                              ? 'sold'
+                              : _saleStatus == 'reserved'
+                              ? 'reserved'
+                              : 'active',
                           items: const [
                             DropdownMenuItem(
-  value: 'active',
-  child: Text('판매중'),
-),
-DropdownMenuItem(
-  value: 'reserved',
-  child: Text('거래 예약중'),
-),
-DropdownMenuItem(
-  value: 'sold',
-  child: Text('판매완료'),
-),
+                              value: 'active',
+                              child: Text('판매중'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'reserved',
+                              child: Text('거래 예약중'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'sold',
+                              child: Text('판매완료'),
+                            ),
                           ],
                           onChanged: (value) async {
                             if (value == null || value == _saleStatus) return;
                             await _updateListingSaleStatus(
                               context,
-                              listing.id,
+                              listing,
                               value,
                             );
                             if (!mounted) return;
@@ -1164,24 +1500,24 @@ DropdownMenuItem(
                     _FavoriteBottomButton(listingId: listing.id),
                     const SizedBox(width: 8),
                     FilledButton(
-  onPressed: () => _showContactInfo(context, listing),
-  style: FilledButton.styleFrom(
-    backgroundColor: _brandOrange,
-    foregroundColor: Colors.white,
-    padding: const EdgeInsets.symmetric(
-      horizontal: 20,
-      vertical: 14,
-    ),
-  ),
-  child: const Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(Icons.chat_bubble_outline, size: 18),
-      SizedBox(width: 8),
-      Text('메시지 보내기'),
-    ],
-  ),
-),
+                      onPressed: () => _openChatForListing(context, listing),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _brandOrange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.chat_bubble_outline, size: 18),
+                          SizedBox(width: 8),
+                          Text('메시지 보내기'),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
         ),
@@ -1339,15 +1675,15 @@ void _showSellerProfile(BuildContext context, MarketListing listing) {
               ),
             const SizedBox(height: 10),
             FilledButton.icon(
-                 onPressed: () => _showContactInfo(context, listing),
-                 style: FilledButton.styleFrom(
-                 backgroundColor: _brandOrange,
+              onPressed: () => _openChatForListing(context, listing),
+              style: FilledButton.styleFrom(
+                backgroundColor: _brandOrange,
                 foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(46),
-  ),
-  icon: const Icon(Icons.chat_bubble_outline),
-  label: const Text('메시지 보내기'),
-),
+              ),
+              icon: const Icon(Icons.chat_bubble_outline),
+              label: const Text('메시지 보내기'),
+            ),
           ],
         ),
       ),
@@ -1355,35 +1691,596 @@ void _showSellerProfile(BuildContext context, MarketListing listing) {
   );
 }
 
-void _showContactInfo(BuildContext context, MarketListing listing) {
-  final kakao = listing.kakaoId?.trim().isNotEmpty == true
-      ? listing.kakaoId!.trim()
-      : '없음';
-  final line = listing.lineId?.trim().isNotEmpty == true
-      ? listing.lineId!.trim()
-      : '없음';
+String _chatRoomIdForListing({
+  required String listingId,
+  required String buyerUid,
+  required String sellerUid,
+}) {
+  return '${listingId}_${buyerUid}_$sellerUid';
+}
 
-  showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('연락처'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+Future<void> _openChatForListing(
+  BuildContext context,
+  MarketListing listing,
+) async {
+  final unavailableMessage = _firebaseUnavailableMessage();
+  if (unavailableMessage != null) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(unavailableMessage)));
+    return;
+  }
+
+  final user = _currentUserOrNull();
+  if (user == null) {
+    await _openLoginScreen(context);
+    return;
+  }
+
+  final sellerUid = listing.sellerUid?.trim();
+  if (sellerUid == null || sellerUid.isEmpty) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('판매자 정보가 없어 채팅을 시작할 수 없습니다.')));
+    return;
+  }
+
+  if (sellerUid == user.uid) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('본인이 등록한 물품에는 메시지를 보낼 수 없습니다.')),
+    );
+    return;
+  }
+
+  try {
+    final buyerNickname = await _fetchNicknameForUid(
+      user.uid,
+      displayName: user.displayName,
+      email: user.email,
+    );
+    final sellerNickname = await _resolveSellerNickname(listing);
+    final roomId = _chatRoomIdForListing(
+      listingId: listing.id,
+      buyerUid: user.uid,
+      sellerUid: sellerUid,
+    );
+    final photoUrl = listing.photoUrls.isNotEmpty
+        ? listing.photoUrls.first
+        : '';
+
+    await FirebaseFirestore.instance
+        .collection('chatRooms')
+        .doc(roomId)
+        .set({
+          'listingId': listing.id,
+          'listingTitle': listing.title,
+          'listingPrice': listing.price,
+          'listingPhotoUrl': photoUrl,
+          'buyerUid': user.uid,
+          'buyerNickname': buyerNickname,
+          'sellerUid': sellerUid,
+          'sellerNickname': sellerNickname,
+          'participantIds': [user.uid, sellerUid],
+          'participantNames': {
+            user.uid: buyerNickname,
+            sellerUid: sellerNickname,
+          },
+          'updatedAt': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true))
+        .timeout(_firebaseRequestTimeout);
+
+    if (!context.mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatRoomScreen(
+          roomId: roomId,
+          listing: listing,
+          otherUserName: sellerNickname,
+        ),
+      ),
+    );
+  } catch (error, stackTrace) {
+    debugPrint('[Chat] open failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('채팅방을 열 수 없습니다.')));
+    }
+  }
+}
+
+Future<void> _createUserNotification({
+  required String recipientUid,
+  required String type,
+  required String title,
+  required String body,
+  String? actorUid,
+  String? listingId,
+  String? chatRoomId,
+}) async {
+  if (recipientUid.trim().isEmpty || _firebaseUnavailableMessage() != null) {
+    return;
+  }
+
+  try {
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(recipientUid)
+        .collection('notifications')
+        .add({
+          'type': type,
+          'title': title,
+          'body': body,
+          'actorUid': actorUid,
+          'listingId': listingId,
+          'chatRoomId': chatRoomId,
+          'isRead': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        })
+        .timeout(_firebaseRequestTimeout);
+  } catch (error, stackTrace) {
+    debugPrint('[Notification] create failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+}
+
+Future<void> _notifyChatRecipients({
+  required DocumentReference<Map<String, dynamic>> roomRef,
+  required String senderUid,
+  required String senderName,
+  required String message,
+}) async {
+  try {
+    final room = await roomRef.get().timeout(_firebaseRequestTimeout);
+    final data = room.data();
+    if (data == null) return;
+
+    final participants = _stringListValue(data['participantIds']);
+    final listingTitle = _stringValue(data['listingTitle'], '물품');
+    final listingId = _stringValue(data['listingId'], '');
+    final preview = message.length > 40
+        ? '${message.substring(0, 40)}...'
+        : message;
+
+    for (final uid in participants) {
+      if (uid == senderUid) continue;
+      await _createUserNotification(
+        recipientUid: uid,
+        type: 'chat',
+        title: '새 채팅 메시지',
+        body: '$listingTitle · $senderName: $preview',
+        actorUid: senderUid,
+        listingId: listingId.isEmpty ? null : listingId,
+        chatRoomId: roomRef.id,
+      );
+    }
+  } catch (error, stackTrace) {
+    debugPrint('[Notification] chat lookup failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+}
+
+Future<void> _notifyFavoriteUsersOfStatusChange(
+  MarketListing listing,
+  String status,
+) async {
+  final label = _saleStatusLabel(status);
+  try {
+    final favorites = await FirebaseFirestore.instance
+        .collectionGroup('favorites')
+        .where('listingId', isEqualTo: listing.id)
+        .get()
+        .timeout(_firebaseRequestTimeout);
+
+    final notifiedUserIds = <String>{};
+    for (final favorite in favorites.docs) {
+      final userRef = favorite.reference.parent.parent;
+      final recipientUid = userRef?.id;
+      if (recipientUid == null ||
+          recipientUid == listing.sellerUid ||
+          !notifiedUserIds.add(recipientUid)) {
+        continue;
+      }
+      await _createUserNotification(
+        recipientUid: recipientUid,
+        type: 'listingStatus',
+        title: '찜한 물품 상태 변경',
+        body: '${listing.title}이 $label 상태로 변경되었습니다.',
+        actorUid: listing.sellerUid,
+        listingId: listing.id,
+      );
+    }
+  } catch (error, stackTrace) {
+    debugPrint('[Notification] status fanout failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+}
+
+class ChatRoomScreen extends StatefulWidget {
+  const ChatRoomScreen({
+    required this.roomId,
+    this.listing,
+    this.otherUserName,
+    super.key,
+  });
+
+  final String roomId;
+  final MarketListing? listing;
+  final String? otherUserName;
+
+  @override
+  State<ChatRoomScreen> createState() => _ChatRoomScreenState();
+}
+
+class _ChatRoomScreenState extends State<ChatRoomScreen> {
+  final _messageController = TextEditingController();
+  final _messageScrollController = ScrollController();
+  bool _isSending = false;
+  bool _isMarkingMessagesRead = false;
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _messageScrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollMessagesToBottom({bool animated = true}) {
+    if (!_messageScrollController.hasClients) return;
+
+    final bottom = _messageScrollController.position.maxScrollExtent;
+    if (animated) {
+      _messageScrollController.animateTo(
+        bottom,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
+
+    _messageScrollController.jumpTo(bottom);
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty || _isSending) return;
+
+    final user = _currentUserOrNull();
+    if (user == null) {
+      await _openLoginScreen(context);
+      return;
+    }
+
+    setState(() => _isSending = true);
+    try {
+      final senderName = await _fetchNicknameForUid(
+        user.uid,
+        displayName: user.displayName,
+        email: user.email,
+      );
+      final roomRef = FirebaseFirestore.instance
+          .collection('chatRooms')
+          .doc(widget.roomId);
+
+      await roomRef
+          .collection('messages')
+          .add({
+            'senderUid': user.uid,
+            'senderName': senderName,
+            'text': text,
+            'readBy': [user.uid],
+            'createdAt': FieldValue.serverTimestamp(),
+          })
+          .timeout(_firebaseRequestTimeout);
+
+      await roomRef
+          .update({
+            'lastMessage': text,
+            'lastMessageSenderUid': user.uid,
+            'lastMessageAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          })
+          .timeout(_firebaseRequestTimeout);
+
+      await _notifyChatRecipients(
+        roomRef: roomRef,
+        senderUid: user.uid,
+        senderName: senderName,
+        message: text,
+      );
+      _messageController.clear();
+    } catch (error, stackTrace) {
+      debugPrint('[Chat] send failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('메시지 전송에 실패했습니다.')));
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  Future<void> _markIncomingMessagesAsRead(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    String uid,
+  ) async {
+    if (_isMarkingMessagesRead || _firebaseUnavailableMessage() != null) {
+      return;
+    }
+
+    final unreadIncomingDocs = docs.where((doc) {
+      final data = doc.data();
+      final senderUid = _stringValue(data['senderUid'], '');
+      final readBy = _stringListValue(data['readBy']);
+      return senderUid.isNotEmpty && senderUid != uid && !readBy.contains(uid);
+    }).toList();
+    if (unreadIncomingDocs.isEmpty) return;
+
+    _isMarkingMessagesRead = true;
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in unreadIncomingDocs) {
+        batch.update(doc.reference, {
+          'readBy': FieldValue.arrayUnion([uid]),
+        });
+      }
+      await batch.commit().timeout(_firebaseRequestTimeout);
+    } catch (error, stackTrace) {
+      debugPrint('[Chat] mark read failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    } finally {
+      _isMarkingMessagesRead = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = _currentUserOrNull();
+    final listing = widget.listing;
+
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.otherUserName ?? '채팅')),
+      body: Column(
         children: [
-          Text('카카오톡 ID: $kakao'),
-          const SizedBox(height: 8),
-          Text('라인 ID: $line'),
+          if (listing != null) _ChatListingHeader(listing: listing),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('chatRooms')
+                  .doc(widget.roomId)
+                  .collection('messages')
+                  .orderBy('createdAt')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Center(child: Text('메시지를 불러올 수 없습니다.'));
+                }
+                final docs = snapshot.data?.docs ?? [];
+                if (docs.isNotEmpty) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    _scrollMessagesToBottom();
+                    if (user != null) {
+                      _markIncomingMessagesAsRead(docs, user.uid);
+                    }
+                  });
+                }
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      '아직 메시지가 없습니다.',
+                      style: TextStyle(color: _muted),
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  controller: _messageScrollController,
+                  reverse: false,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final data = docs[index].data();
+                    final senderUid = _stringValue(data['senderUid'], '');
+                    final isMine = senderUid == user?.uid;
+                    final readBy = _stringListValue(data['readBy']);
+                    final isReadByOther =
+                        isMine && readBy.any((uid) => uid != user?.uid);
+                    return _MessageBubble(
+                      text: _stringValue(data['text'], ''),
+                      senderName: _stringValue(data['senderName'], ''),
+                      isMine: isMine,
+                      isReadByOther: isReadByOther,
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: Color(0xFFEDEDED))),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      minLines: 1,
+                      maxLines: 4,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _sendMessage(),
+                      decoration: const InputDecoration(hintText: '메시지를 입력하세요'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed: _isSending ? null : _sendMessage,
+                    style: IconButton.styleFrom(
+                      backgroundColor: _brandOrange,
+                      foregroundColor: Colors.white,
+                    ),
+                    icon: _isSending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.send),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('확인'),
-        ),
-      ],
-    ),
-  );
+    );
+  }
+}
+
+class _ChatListingHeader extends StatelessWidget {
+  const _ChatListingHeader({required this.listing});
+
+  final MarketListing listing;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = listing.photoUrls.isNotEmpty
+        ? listing.photoUrls.first
+        : null;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFEDEDED))),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: listing.color,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: imageUrl == null
+                ? Icon(listing.icon, color: Colors.white)
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+                      errorBuilder: (_, _, _) =>
+                          Icon(listing.icon, color: Colors.white),
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  listing.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  listing.price,
+                  style: const TextStyle(color: _muted, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MessageBubble extends StatelessWidget {
+  const _MessageBubble({
+    required this.text,
+    required this.senderName,
+    required this.isMine,
+    required this.isReadByOther,
+  });
+
+  final String text;
+  final String senderName;
+  final bool isMine;
+  final bool isReadByOther;
+
+  @override
+  Widget build(BuildContext context) {
+    final bubble = Container(
+      constraints: const BoxConstraints(maxWidth: 280),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: isMine ? _brandOrange : _surface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          if (!isMine && senderName.isNotEmpty) ...[
+            Text(
+              senderName,
+              style: const TextStyle(
+                color: _muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 3),
+          ],
+          Text(text, style: TextStyle(color: isMine ? Colors.white : _ink)),
+        ],
+      ),
+    );
+
+    return Align(
+      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: isMine
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 5, bottom: 2),
+                    child: Text(
+                      isReadByOther ? '읽음' : '1',
+                      style: TextStyle(
+                        color: isReadByOther ? _muted : _brandOrange,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  bubble,
+                ],
+              )
+            : bubble,
+      ),
+    );
+  }
 }
 
 class CategoryScreen extends StatefulWidget {
@@ -1424,8 +2321,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
                   fontWeight: isSelected ? FontWeight.w900 : null,
                 ),
                 onPressed: () => setState(() {
-                  _selectedCategory =
-                      _selectedCategory == category ? null : category;
+                  _selectedCategory = _selectedCategory == category
+                      ? null
+                      : category;
                 }),
               );
             }).toList(),
@@ -1550,11 +2448,11 @@ class _PostListingScreenState extends State<PostListingScreen> {
   final _exchangeRateController = TextEditingController();
 
   ListingType _type = ListingType.used;
-String _category = categories.first;
-String _tradeType = 'sell';
-String _requestType = 'need';
-String _currencyTradeType = 'sell';
-String _currencyDirection = '바트를 원화로';
+  String _category = categories.first;
+  String _tradeType = 'sell';
+  String _requestType = 'need';
+  String _currencyTradeType = 'sell';
+  String _currencyDirection = '바트를 원화로';
   bool _isSubmitting = false;
   final List<XFile> _pickedPhotos = [];
   List<String> _existingPhotoUrls = [];
@@ -1814,7 +2712,8 @@ String _currencyDirection = '바트를 원화로';
   }) async {
     if (_pickedPhotos.isEmpty) return const [];
 
-    final resolvedListingId = listingId ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final resolvedListingId =
+        listingId ?? DateTime.now().millisecondsSinceEpoch.toString();
     final uploadedUrls = <String>[];
     for (var i = 0; i < _pickedPhotos.length; i++) {
       final file = _pickedPhotos[i];
@@ -1823,12 +2722,11 @@ String _currencyDirection = '바트를 원화로';
         'listings/$userId/$resolvedListingId/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
       );
       await ref
-          .putData(
-            bytes,
-            SettableMetadata(contentType: 'image/jpeg'),
-          )
+          .putData(bytes, SettableMetadata(contentType: 'image/jpeg'))
           .timeout(_firebaseRequestTimeout);
-      uploadedUrls.add(await ref.getDownloadURL().timeout(_firebaseRequestTimeout));
+      uploadedUrls.add(
+        await ref.getDownloadURL().timeout(_firebaseRequestTimeout),
+      );
     }
     return uploadedUrls;
   }
@@ -1862,122 +2760,122 @@ String _currencyDirection = '바트를 원화로';
             ),
             const SizedBox(height: 18),
 
-if (_type == ListingType.used) ...[
-  const _InputLabel('거래유형'),
+            if (_type == ListingType.used) ...[
+              const _InputLabel('거래유형'),
 
-  SegmentedButton<String>(
-    segments: const [
-      ButtonSegment(
-        value: 'sell',
-        label: Text('팝니다'),
-        icon: Icon(Icons.sell_outlined),
-      ),
-      ButtonSegment(
-        value: 'buy',
-        label: Text('삽니다'),
-        icon: Icon(Icons.shopping_cart_outlined),
-      ),
-    ],
-    selected: {_tradeType},
-    onSelectionChanged: (value) {
-      setState(() {
-        _tradeType = value.first;
-      });
-    },
-  ),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: 'sell',
+                    label: Text('팝니다'),
+                    icon: Icon(Icons.sell_outlined),
+                  ),
+                  ButtonSegment(
+                    value: 'buy',
+                    label: Text('삽니다'),
+                    icon: Icon(Icons.shopping_cart_outlined),
+                  ),
+                ],
+                selected: {_tradeType},
+                onSelectionChanged: (value) {
+                  setState(() {
+                    _tradeType = value.first;
+                  });
+                },
+              ),
 
-  const SizedBox(height: 18),
+              const SizedBox(height: 18),
 
-  _UsedListingForm(
-    tradeType: _tradeType,
-    titleController: _titleController,
-    itemController: _nameController,
-    priceController: _priceController,
-    placeController: _placeController,
-    descriptionController: _descriptionController,
-    category: _category,
-    onCategoryChanged: (value) => setState(() => _category = value),
-    onPhotosChanged: (files) {
-      _pickedPhotos
-        ..clear()
-        ..addAll(files);
-    },
-    initialPhotoUrls: _existingPhotoUrls,
-    validator: _required,
-  ),
-],
+              _UsedListingForm(
+                tradeType: _tradeType,
+                titleController: _titleController,
+                itemController: _nameController,
+                priceController: _priceController,
+                placeController: _placeController,
+                descriptionController: _descriptionController,
+                category: _category,
+                onCategoryChanged: (value) => setState(() => _category = value),
+                onPhotosChanged: (files) {
+                  _pickedPhotos
+                    ..clear()
+                    ..addAll(files);
+                },
+                initialPhotoUrls: _existingPhotoUrls,
+                validator: _required,
+              ),
+            ],
             if (_type == ListingType.request) ...[
-  const _InputLabel('서비스 유형'),
+              const _InputLabel('서비스 유형'),
 
-  SegmentedButton<String>(
-    segments: const [
-      ButtonSegment(
-        value: 'need',
-        label: Text('해주세요'),
-        icon: Icon(Icons.help_outline),
-      ),
-      ButtonSegment(
-        value: 'offer',
-        label: Text('해드려요'),
-        icon: Icon(Icons.volunteer_activism_outlined),
-      ),
-    ],
-    selected: {_requestType},
-    onSelectionChanged: (value) {
-      setState(() {
-        _requestType = value.first;
-      });
-    },
-  ),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: 'need',
+                    label: Text('해주세요'),
+                    icon: Icon(Icons.help_outline),
+                  ),
+                  ButtonSegment(
+                    value: 'offer',
+                    label: Text('해드려요'),
+                    icon: Icon(Icons.volunteer_activism_outlined),
+                  ),
+                ],
+                selected: {_requestType},
+                onSelectionChanged: (value) {
+                  setState(() {
+                    _requestType = value.first;
+                  });
+                },
+              ),
 
-  const SizedBox(height: 18),
+              const SizedBox(height: 18),
 
-  _DeliveryRequestForm(
-    requestType: _requestType,
-    titleController: _titleController,
-    itemController: _nameController,
-    feeController: _priceController,
-    contactController: _contactController,
-    descriptionController: _descriptionController,
-    validator: _required,
-  ),
-],
+              _DeliveryRequestForm(
+                requestType: _requestType,
+                titleController: _titleController,
+                itemController: _nameController,
+                feeController: _priceController,
+                contactController: _contactController,
+                descriptionController: _descriptionController,
+                validator: _required,
+              ),
+            ],
             if (_type == ListingType.currency) ...[
-  const _InputLabel('거래 방향'),
+              const _InputLabel('거래 방향'),
 
-  SegmentedButton<String>(
-    segments: const [
-      ButtonSegment(
-        value: 'sell',
-        label: Text('바트 판매'),
-        icon: Icon(Icons.trending_up),
-      ),
-      ButtonSegment(
-        value: 'buy',
-        label: Text('바트 구매'),
-        icon: Icon(Icons.trending_down),
-      ),
-    ],
-    selected: {_currencyTradeType},
-    onSelectionChanged: (value) {
-      setState(() {
-        _currencyTradeType = value.first;
-      });
-    },
-  ),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: 'sell',
+                    label: Text('바트 판매'),
+                    icon: Icon(Icons.trending_up),
+                  ),
+                  ButtonSegment(
+                    value: 'buy',
+                    label: Text('바트 구매'),
+                    icon: Icon(Icons.trending_down),
+                  ),
+                ],
+                selected: {_currencyTradeType},
+                onSelectionChanged: (value) {
+                  setState(() {
+                    _currencyTradeType = value.first;
+                  });
+                },
+              ),
 
-  const SizedBox(height: 18),
+              const SizedBox(height: 18),
 
-  _CurrencyExchangeForm(
-    tradeType: _currencyTradeType,
-    titleController: _titleController,
-    amountController: _priceController,
-    rateController: _exchangeRateController,
-    placeController: _placeController,
-    methodController: _descriptionController,
-    validator: _required,
-  ),
-],
+              _CurrencyExchangeForm(
+                tradeType: _currencyTradeType,
+                titleController: _titleController,
+                amountController: _priceController,
+                rateController: _exchangeRateController,
+                placeController: _placeController,
+                methodController: _descriptionController,
+                validator: _required,
+              ),
+            ],
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _isSubmitting ? null : _submitListing,
@@ -1995,7 +2893,9 @@ if (_type == ListingType.used) ...[
                         color: Colors.white,
                       ),
                     )
-                  : Text(isEditing ? '${_type.label} 수정하기' : '${_type.label} 등록하기'),
+                  : Text(
+                      isEditing ? '${_type.label} 수정하기' : '${_type.label} 등록하기',
+                    ),
             ),
           ],
         ),
@@ -2046,9 +2946,9 @@ class _UsedListingForm extends StatelessWidget {
           validator: validator,
           decoration: InputDecoration(
             hintText: tradeType == 'buy'
-              ? '예: 아이폰 15 Pro 삽니다'
-              : '예: 아이폰 14 프로 판매합니다',
-      ),
+                ? '예: 아이폰 15 Pro 삽니다'
+                : '예: 아이폰 14 프로 판매합니다',
+          ),
         ),
         const SizedBox(height: 18),
         const _InputLabel('제품명'),
@@ -2059,23 +2959,17 @@ class _UsedListingForm extends StatelessWidget {
             hintText: tradeType == 'buy'
                 ? '예: 원하는 모델명 입력'
                 : '예: 아이폰 14 프로 256GB',
-      ),
+          ),
         ),
         const SizedBox(height: 18),
-       _InputLabel(
-          tradeType == 'buy'
-              ? '희망 구매 가격'
-              : '판매 가격',
-        ),
+        _InputLabel(tradeType == 'buy' ? '희망 구매 가격' : '판매 가격'),
         TextFormField(
           controller: priceController,
           validator: validator,
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
-            hintText: tradeType == 'buy'
-                ? '희망 구매 금액 입력'
-                : 'THB 또는 KRW 금액 입력',
-      ),
+            hintText: tradeType == 'buy' ? '희망 구매 금액 입력' : 'THB 또는 KRW 금액 입력',
+          ),
         ),
         const SizedBox(height: 18),
         const _InputLabel('카테고리'),
@@ -2095,9 +2989,9 @@ class _UsedListingForm extends StatelessWidget {
           minLines: 5,
           maxLines: 8,
           decoration: InputDecoration(
-          hintText: tradeType == 'buy'
-              ? '원하는 상태, 색상, 용량 등을 적어주세요.'
-              : '상태, 구매 시기, 전달 가능 시간 등을 자세히 적어주세요.',
+            hintText: tradeType == 'buy'
+                ? '원하는 상태, 색상, 용량 등을 적어주세요.'
+                : '상태, 구매 시기, 전달 가능 시간 등을 자세히 적어주세요.',
             alignLabelWithHint: true,
           ),
         ),
@@ -2133,14 +3027,14 @@ class _DeliveryRequestForm extends StatelessWidget {
       children: [
         const _InputLabel('제목'),
         TextFormField(
-  controller: titleController,
-  validator: validator,
-  decoration: InputDecoration(
-    hintText: requestType == 'offer'
-        ? '예: 한국 물품 전달 가능합니다'
-        : '예: 영양제 전달 부탁드립니다',
-  ),
-),
+          controller: titleController,
+          validator: validator,
+          decoration: InputDecoration(
+            hintText: requestType == 'offer'
+                ? '예: 한국 물품 전달 가능합니다'
+                : '예: 영양제 전달 부탁드립니다',
+          ),
+        ),
         const SizedBox(height: 18),
         const _InputLabel('물품명'),
         TextFormField(
@@ -2149,20 +3043,14 @@ class _DeliveryRequestForm extends StatelessWidget {
           decoration: const InputDecoration(hintText: '배달 원하는 물품을 기재하세요.'),
         ),
         const SizedBox(height: 18),
-        _InputLabel(
-  requestType == 'offer'
-      ? '희망 수수료'
-      : '수수료 제안',
-),
+        _InputLabel(requestType == 'offer' ? '희망 수수료' : '수수료 제안'),
         TextFormField(
           controller: feeController,
           validator: validator,
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
-  hintText: requestType == 'offer'
-      ? '예: 500 THB'
-      : '예: 700 THB',
-),
+            hintText: requestType == 'offer' ? '예: 500 THB' : '예: 700 THB',
+          ),
         ),
         const SizedBox(height: 18),
         const _InputLabel('카카오톡 or 라인 ID'),
@@ -2179,11 +3067,11 @@ class _DeliveryRequestForm extends StatelessWidget {
           minLines: 6,
           maxLines: 9,
           decoration: InputDecoration(
-  hintText: requestType == 'offer'
-      ? '가능한 날짜, 출발지/도착지, 수하물 여유 공간 등을 적어주세요.'
-      : '부탁할 물건의 종류, 수량, 전달 희망 장소 등을 적어주세요.',
-  alignLabelWithHint: true,
-),
+            hintText: requestType == 'offer'
+                ? '가능한 날짜, 출발지/도착지, 수하물 여유 공간 등을 적어주세요.'
+                : '부탁할 물건의 종류, 수량, 전달 희망 장소 등을 적어주세요.',
+            alignLabelWithHint: true,
+          ),
         ),
         const SizedBox(height: 14),
         const _NoticeBox(
@@ -2223,48 +3111,34 @@ class _CurrencyExchangeForm extends StatelessWidget {
         TextFormField(
           controller: titleController,
           validator: validator,
-        decoration: InputDecoration(
-  hintText: tradeType == 'buy'
-      ? '예: 바트 10,000 THB 구매 원합니다'
-      : '예: 바트 5,000 THB 판매합니다',
-),
+          decoration: InputDecoration(
+            hintText: tradeType == 'buy'
+                ? '예: 바트 10,000 THB 구매 원합니다'
+                : '예: 바트 5,000 THB 판매합니다',
+          ),
         ),
         const SizedBox(height: 18),
         const _InputLabel('원하는 화폐'),
-      
-        Container(
-  width: double.infinity,
-  padding: const EdgeInsets.symmetric(
-    horizontal: 16,
-    vertical: 16,
-  ),
-  decoration: BoxDecoration(
-    border: Border.all(color: Colors.grey),
-    borderRadius: BorderRadius.circular(12),
-  ),
-  child: Text(
-    tradeType == 'buy'
-        ? '원화를 바트로'
-        : '바트를 원화로',
-  ),
-),
 
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(tradeType == 'buy' ? '원화를 바트로' : '바트를 원화로'),
+        ),
 
         const SizedBox(height: 18),
-        _InputLabel(
-  tradeType == 'buy'
-      ? '구매 희망 금액'
-      : '판매 금액',
-),
+        _InputLabel(tradeType == 'buy' ? '구매 희망 금액' : '판매 금액'),
         TextFormField(
           controller: amountController,
           validator: validator,
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
-  hintText: tradeType == 'buy'
-      ? '예: 10,000 THB'
-      : '예: 5,000 THB',
-),
+            hintText: tradeType == 'buy' ? '예: 10,000 THB' : '예: 5,000 THB',
+          ),
         ),
         const SizedBox(height: 18),
         const _InputLabel('적용 환율'),
@@ -2272,10 +3146,8 @@ class _CurrencyExchangeForm extends StatelessWidget {
           controller: rateController,
           validator: validator,
           decoration: InputDecoration(
-  hintText: tradeType == 'buy'
-      ? '예: 네이버 살때 기준'
-      : '예: 네이버 팔때 기준',
-),
+            hintText: tradeType == 'buy' ? '예: 네이버 살때 기준' : '예: 네이버 팔때 기준',
+          ),
         ),
         const SizedBox(height: 18),
         const _InputLabel('거래 희망 장소'),
@@ -2283,10 +3155,8 @@ class _CurrencyExchangeForm extends StatelessWidget {
           controller: placeController,
           validator: validator,
           decoration: InputDecoration(
-  hintText: tradeType == 'buy'
-      ? '예: 방콕 BTS 역 근처'
-      : '예: 파타야 터미널21 근처',
-),
+            hintText: tradeType == 'buy' ? '예: 방콕 BTS 역 근처' : '예: 파타야 터미널21 근처',
+          ),
         ),
         const SizedBox(height: 18),
         const _InputLabel('거래방법'),
@@ -2296,11 +3166,11 @@ class _CurrencyExchangeForm extends StatelessWidget {
           minLines: 3,
           maxLines: 5,
           decoration: InputDecoration(
-  hintText: tradeType == 'buy'
-      ? '예: 한국 계좌 이체 후 바트 현금 수령 희망'
-      : '예: 바트 현금 전달 후 한국 계좌 입금 희망',
-  alignLabelWithHint: true,
-),
+            hintText: tradeType == 'buy'
+                ? '예: 한국 계좌 이체 후 바트 현금 수령 희망'
+                : '예: 바트 현금 전달 후 한국 계좌 입금 희망',
+            alignLabelWithHint: true,
+          ),
         ),
         const SizedBox(height: 14),
         const _NoticeBox(
@@ -2796,6 +3666,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
 void _showContactSupport(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,
@@ -2812,18 +3683,20 @@ void _showContactSupport(BuildContext context) {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 6),
-            const Text(
-              '아래 채널로 문의해주세요.',
-              style: TextStyle(color: _muted),
-            ),
+            const Text('아래 채널로 문의해주세요.', style: TextStyle(color: _muted)),
             const SizedBox(height: 16),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.chat_bubble_outline, color: _brandOrange),
+              leading: const Icon(
+                Icons.chat_bubble_outline,
+                color: _brandOrange,
+              ),
               title: const Text('카카오톡 문의'),
               subtitle: const Text('카카오톡 ID: your_kakao_id'),
               onTap: () async {
-                final uri = Uri.parse('https://open.kakao.com/o/your_open_chat_link');
+                final uri = Uri.parse(
+                  'https://open.kakao.com/o/your_open_chat_link',
+                );
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 }
@@ -2848,6 +3721,7 @@ void _showContactSupport(BuildContext context) {
     ),
   );
 }
+
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -2956,9 +3830,9 @@ class SettingsScreen extends StatelessWidget {
             title: '공지사항',
             subtitle: '운영자가 게시한 공지사항',
             onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const NoticesScreen())),
-        ),
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const NoticesScreen())),
+          ),
           _SettingsTile(
             icon: Icons.headset_mic_outlined,
             title: '고객센터',
@@ -3403,7 +4277,9 @@ class _PhotoPickerMockState extends State<_PhotoPickerMock> {
                   children: [
                     const Icon(Icons.camera_alt_outlined),
                     const SizedBox(height: 4),
-                    Text('${widget.initialPhotoUrls.length + _photos.length}/5'),
+                    Text(
+                      '${widget.initialPhotoUrls.length + _photos.length}/5',
+                    ),
                   ],
                 ),
               ),
@@ -3637,6 +4513,8 @@ class _UserInfoSections extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 18),
+            _MyChatRoomsSection(userId: user!.uid),
+            const SizedBox(height: 18),
             _MySellingListingsSection(userId: user!.uid),
             const SizedBox(height: 18),
             _MyFavoritesListSection(userId: user!.uid),
@@ -3727,10 +4605,27 @@ Future<void> _toggleFavorite(BuildContext context, String listingId) async {
         ).showSnackBar(const SnackBar(content: Text('찜 목록에서 제거했습니다.')));
       }
     } else {
-      await ref.set({
-        'listingId': listingId,
-        'createdAt': FieldValue.serverTimestamp(),
-      }).timeout(_firebaseRequestTimeout);
+      await ref
+          .set({
+            'listingId': listingId,
+            'createdAt': FieldValue.serverTimestamp(),
+          })
+          .timeout(_firebaseRequestTimeout);
+      final listing = await _findListingById(listingId);
+      final sellerUid = listing?.sellerUid?.trim();
+      if (listing != null &&
+          sellerUid != null &&
+          sellerUid.isNotEmpty &&
+          sellerUid != user.uid) {
+        await _createUserNotification(
+          recipientUid: sellerUid,
+          type: 'favorite',
+          title: '새 찜 알림',
+          body: '${listing.title}을 다른 사용자가 찜했습니다.',
+          actorUid: user.uid,
+          listingId: listing.id,
+        );
+      }
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
@@ -3794,6 +4689,173 @@ class _FavoriteBottomButton extends StatelessWidget {
   }
 }
 
+class _MyChatRoomsSection extends StatelessWidget {
+  const _MyChatRoomsSection({required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_firebaseUnavailableMessage() != null) {
+      return const _ChatRoomsPanel(
+        rooms: [],
+        emptyText: 'Firebase 연결 후 채팅 목록을 확인할 수 있습니다.',
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('chatRooms')
+          .where('participantIds', arrayContains: userId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _ChatRoomsPanel(rooms: [], isLoading: true);
+        }
+        if (snapshot.hasError) {
+          debugPrint('[ChatRooms] ${snapshot.error}');
+          return const _ChatRoomsPanel(
+            rooms: [],
+            emptyText: '채팅 목록을 불러오지 못했습니다.',
+          );
+        }
+
+        final rooms = snapshot.data?.docs.toList() ?? [];
+        rooms.sort((a, b) {
+          final aTime = _timestampMillis(a.data()['updatedAt']);
+          final bTime = _timestampMillis(b.data()['updatedAt']);
+          return bTime.compareTo(aTime);
+        });
+
+        return _ChatRoomsPanel(rooms: rooms);
+      },
+    );
+  }
+}
+
+class _ChatRoomsPanel extends StatelessWidget {
+  const _ChatRoomsPanel({
+    required this.rooms,
+    this.emptyText = '진행 중인 채팅이 없습니다.',
+    this.isLoading = false,
+  });
+
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> rooms;
+  final String emptyText;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '채팅 목록',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFEDEDED)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: isLoading
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : rooms.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(emptyText, style: const TextStyle(color: _muted)),
+                )
+              : Column(
+                  children: [
+                    for (var i = 0; i < rooms.length; i++) ...[
+                      if (i > 0)
+                        const Divider(height: 1, color: Color(0xFFEDEDED)),
+                      _ChatRoomTile(room: rooms[i]),
+                    ],
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChatRoomTile extends StatelessWidget {
+  const _ChatRoomTile({required this.room});
+
+  final QueryDocumentSnapshot<Map<String, dynamic>> room;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = room.data();
+    final currentUid = _currentUserOrNull()?.uid;
+    final sellerUid = _stringValue(data['sellerUid'], '');
+    final sellerName = _stringValue(data['sellerNickname'], '판매자');
+    final buyerName = _stringValue(data['buyerNickname'], '구매자');
+    final otherName = currentUid == sellerUid ? buyerName : sellerName;
+    final listingTitle = _stringValue(data['listingTitle'], '물품');
+    final lastMessage = _stringValue(data['lastMessage'], '아직 메시지가 없습니다.');
+    final imageUrl = _stringValue(data['listingPhotoUrl'], '');
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: imageUrl.isEmpty
+            ? const Icon(Icons.chat_bubble_outline, color: _muted)
+            : ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+                  errorBuilder: (_, _, _) =>
+                      const Icon(Icons.chat_bubble_outline, color: _muted),
+                ),
+              ),
+      ),
+      title: Text(
+        '$otherName · $listingTitle',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w800),
+      ),
+      subtitle: Text(
+        lastMessage,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: _muted),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: _muted),
+      onTap: () async {
+        final listingId = _stringValue(data['listingId'], '');
+        final listing = listingId.isEmpty
+            ? null
+            : await _findListingById(listingId);
+        if (!context.mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ChatRoomScreen(
+              roomId: room.id,
+              listing: listing,
+              otherUserName: otherName,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _MyPageListingSection extends StatelessWidget {
   const _MyPageListingSection({
     required this.title,
@@ -3830,10 +4892,7 @@ class _MyPageListingSection extends StatelessWidget {
               : listings.isEmpty
               ? Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(
-                    emptyText,
-                    style: const TextStyle(color: _muted),
-                  ),
+                  child: Text(emptyText, style: const TextStyle(color: _muted)),
                 )
               : Column(
                   children: [
@@ -3864,26 +4923,26 @@ class _MyPageListingTile extends StatelessWidget {
         ),
       ),
       leading: Container(
-  width: 44,
-  height: 44,
-  decoration: BoxDecoration(
-    color: listing.color,
-    borderRadius: BorderRadius.circular(6),
-  ),
-  child: listing.photoUrls.isNotEmpty
-      ? ClipRRect(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: listing.color,
           borderRadius: BorderRadius.circular(6),
-          child: Image.network(
-            listing.photoUrls.first,
-            width: 44,
-            height: 44,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) =>
-                Icon(listing.icon, color: Colors.white, size: 22),
-          ),
-        )
-      : Icon(listing.icon, color: Colors.white, size: 22),
-),
+        ),
+        child: listing.photoUrls.isNotEmpty
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(
+                  listing.photoUrls.first,
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      Icon(listing.icon, color: Colors.white, size: 22),
+                ),
+              )
+            : Icon(listing.icon, color: Colors.white, size: 22),
+      ),
       title: Text(
         listing.title,
         maxLines: 1,
@@ -3940,10 +4999,11 @@ class _MySellingListingsSection extends StatelessWidget {
           );
         }
 
-        final listings = (snapshot.data?.docs.map(_listingFromDoc).toList() ??
-                <MarketListing>[])
-            .where((listing) => listing.status != 'sold')
-            .toList();
+        final listings =
+            (snapshot.data?.docs.map(_listingFromDoc).toList() ??
+                    <MarketListing>[])
+                .where((listing) => listing.status != 'sold')
+                .toList();
 
         return _MyPageListingSection(
           title: '판매중인 물품 목록',
@@ -4146,27 +5206,6 @@ class _CategoryDropdown extends StatelessWidget {
   }
 }
 
-class _CurrencyDropdown extends StatelessWidget {
-  const _CurrencyDropdown({required this.value, required this.onChanged});
-
-  final String value;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      items: const [
-        DropdownMenuItem(value: '바트를 원화로', child: Text('바트를 원화로')),
-        DropdownMenuItem(value: '원화를 바트로', child: Text('원화를 바트로')),
-      ],
-      onChanged: (value) {
-        if (value != null) onChanged(value);
-      },
-    );
-  }
-}
-
 class _PhoneCountryDropdown extends StatelessWidget {
   const _PhoneCountryDropdown({this.value = '+66', this.onChanged});
 
@@ -4307,6 +5346,11 @@ List<String> _stringListValue(Object? value) {
   return result;
 }
 
+int _timestampMillis(Object? value) {
+  if (value is Timestamp) return value.millisecondsSinceEpoch;
+  return 0;
+}
+
 final _sellerNicknameCache = <String, String>{};
 
 bool _needsSellerNicknameLookup(MarketListing listing) {
@@ -4373,10 +5417,7 @@ Future<String> _resolveSellerNickname(MarketListing listing) async {
     return listing.sellerNickname;
   }
 
-  return _fetchNicknameForUid(
-    sellerUid,
-    fallback: listing.sellerNickname,
-  );
+  return _fetchNicknameForUid(sellerUid, fallback: listing.sellerNickname);
 }
 
 class _SellerTradeLine extends StatelessWidget {
@@ -4398,10 +5439,7 @@ class _SellerTradeLine extends StatelessWidget {
       future: _resolveSellerNickname(listing),
       builder: (context, snapshot) {
         final nickname = snapshot.data ?? listing.sellerNickname;
-        return Text(
-          '$nickname · 거래 ${listing.tradeCount}회',
-          style: style,
-        );
+        return Text('$nickname · 거래 ${listing.tradeCount}회', style: style);
       },
     );
   }
@@ -4415,10 +5453,7 @@ ListingType _listingTypeFromValue(Object? value) {
   );
 }
 
-MarketListing _listingFromFirestoreData(
-  String id,
-  Map<String, dynamic> data,
-) {
+MarketListing _listingFromFirestoreData(String id, Map<String, dynamic> data) {
   final type = _listingTypeFromValue(data['type']);
   final place = _stringValue(data['place'], '위치 미입력');
   final seller = _stringValue(data['sellerNickname'], '익명');
@@ -4484,7 +5519,7 @@ class MarketListing {
   const MarketListing({
     required this.id,
     required this.type,
-             this.tradeType = 'sell',
+    this.tradeType = 'sell',
     required this.title,
     required this.category,
     required this.price,
@@ -4631,25 +5666,21 @@ const sampleListings = [
     previousTrades: ['소액 바트 교환 완료', '한국 계좌 이체 거래 완료'],
   ),
   MarketListing(
-  id: 'buy-iphone15',
-  type: ListingType.used,
-  tradeType: 'buy',
-  title: '아이폰 15 Pro 256GB 삽니다',
-  category: '디지털기기',
-  price: '희망가 22,000 THB',
-  place: '방콕',
-  placeNote: '아속역 ~ 프롬퐁 가능',
-  postedAgo: '12분 전',
-  sellerNickname: '방콕라이프',
-  tradeCount: 7,
-  description:
-      '블랙 또는 네이비 색상 희망합니다. 기능 이상 없는 제품이면 생활기스는 괜찮습니다.',
-  icon: Icons.shopping_bag_outlined,
-  color: Color(0xFFEF6C00),
-  photoCount: 0,
-  previousTrades: [
-    '에어팟 프로 구매 완료',
-    '아이패드 거래 완료',
-  ],
-),
+    id: 'buy-iphone15',
+    type: ListingType.used,
+    tradeType: 'buy',
+    title: '아이폰 15 Pro 256GB 삽니다',
+    category: '디지털기기',
+    price: '희망가 22,000 THB',
+    place: '방콕',
+    placeNote: '아속역 ~ 프롬퐁 가능',
+    postedAgo: '12분 전',
+    sellerNickname: '방콕라이프',
+    tradeCount: 7,
+    description: '블랙 또는 네이비 색상 희망합니다. 기능 이상 없는 제품이면 생활기스는 괜찮습니다.',
+    icon: Icons.shopping_bag_outlined,
+    color: Color(0xFFEF6C00),
+    photoCount: 0,
+    previousTrades: ['에어팟 프로 구매 완료', '아이패드 거래 완료'],
+  ),
 ];
