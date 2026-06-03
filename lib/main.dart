@@ -9,6 +9,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'firebase_options.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 const _firebaseRequestTimeout = Duration(seconds: 15);
 bool _firebaseReady = false;
@@ -3534,6 +3536,36 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isSubmitting = false;
 
+  bool _isGoogleSubmitting = false;
+
+Future<void> _signInWithGoogle() async {
+  final unavailableMessage = _firebaseUnavailableMessage();
+  if (unavailableMessage != null) {
+    _showMessage(unavailableMessage);
+    return;
+  }
+  setState(() => _isGoogleSubmitting = true);
+  try {
+    final googleUser = await GoogleSignIn().signIn();
+    if (googleUser == null) return; // 사용자가 취소
+    final googleAuth = await googleUser.authentication;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+    await FirebaseAuth.instance.signInWithCredential(credential);
+    if (!mounted) return;
+    _showMessage('구글 로그인되었습니다.');
+    Navigator.of(context).pop();
+  } on FirebaseAuthException catch (e) {
+    _showMessage(_firebaseMessage(e));
+  } catch (e) {
+    _showMessage('구글 로그인에 실패했습니다.');
+  } finally {
+    if (mounted) setState(() => _isGoogleSubmitting = false);
+  }
+}
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -3660,6 +3692,36 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: const Text('아직 계정이 없나요? 회원가입'),
               ),
             ),
+            const SizedBox(height: 16),
+const Row(
+  children: [
+    Expanded(child: Divider()),
+    Padding(
+      padding: EdgeInsets.symmetric(horizontal: 12),
+      child: Text('또는', style: TextStyle(color: _muted, fontSize: 13)),
+    ),
+    Expanded(child: Divider()),
+  ],
+),
+const SizedBox(height: 16),
+OutlinedButton.icon(
+  onPressed: _isGoogleSubmitting ? null : _signInWithGoogle,
+  style: OutlinedButton.styleFrom(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    side: const BorderSide(color: Color(0xFFDDDDDD)),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+  ),
+  icon: _isGoogleSubmitting
+      ? const SizedBox(
+          width: 18, height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        )
+      : SvgPicture.asset(
+          'assets/images/google.svg',
+          width: 20, height: 20,
+        ),
+  label: const Text('Google로 계속하기', style: TextStyle(color: _ink)),
+),
           ],
         ),
       ),
