@@ -146,18 +146,29 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
   String? _selectedHomeCategory;
+  ListingType? _selectedHomeType;
 
   void _moveToHomeTab() {
     if (!mounted) return;
     setState(() {
       _index = 0;
       _selectedHomeCategory = null;
+      _selectedHomeType = null;
     });
   }
 
   void _handleCategorySelected(String category) {
     setState(() {
       _selectedHomeCategory = category;
+      _selectedHomeType = ListingType.used; // 카테고리 선택 시 '중고거래' 타입으로 고정
+      _index = 0;
+    });
+  }
+
+  void _handleTypeSelected(ListingType type) {
+    setState(() {
+      _selectedHomeType = type;
+      _selectedHomeCategory = null; // 타입 변경 시 카테고리 초기화
       _index = 0;
     });
   }
@@ -247,8 +258,12 @@ class _AppShellState extends State<AppShell> {
       HomeScreen(
         onWrite: _handleWriteTap,
         initialCategory: _selectedHomeCategory,
+        initialType: _selectedHomeType,
       ),
-      CategoryScreen(onCategorySelected: _handleCategorySelected),
+      CategoryScreen(
+        onCategorySelected: _handleCategorySelected,
+        onTypeSelected: _handleTypeSelected,
+      ),
       PostListingScreen(onSubmitSuccess: _moveToHomeTab),
       const MyPageScreen(),
     ];
@@ -324,10 +339,16 @@ class _AppShellState extends State<AppShell> {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({required this.onWrite, this.initialCategory, super.key});
+  const HomeScreen({
+    required this.onWrite,
+    this.initialCategory,
+    this.initialType,
+    super.key,
+  });
 
   final VoidCallback onWrite;
   final String? initialCategory;
+  final ListingType? initialType;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -342,13 +363,18 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _selectedCategory = widget.initialCategory;
+    _selectedType = widget.initialType;
   }
 
   @override
   void didUpdateWidget(HomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.initialCategory != oldWidget.initialCategory) {
-      _selectedCategory = widget.initialCategory;
+    if (widget.initialCategory != oldWidget.initialCategory ||
+        widget.initialType != oldWidget.initialType) {
+      setState(() {
+        _selectedCategory = widget.initialCategory;
+        _selectedType = widget.initialType;
+      });
     }
   }
 
@@ -2315,8 +2341,14 @@ class _MessageBubble extends StatelessWidget {
 }
 
 class CategoryScreen extends StatefulWidget {
-  const CategoryScreen({required this.onCategorySelected, super.key});
+  const CategoryScreen({
+    required this.onCategorySelected,
+    required this.onTypeSelected,
+    super.key,
+  });
+
   final ValueChanged<String> onCategorySelected;
+  final ValueChanged<ListingType> onTypeSelected;
 
   @override
   State<CategoryScreen> createState() => _CategoryScreenState();
@@ -2345,9 +2377,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
               return ActionChip(
                 label: Text(category),
                 avatar: const Icon(Icons.sell_outlined, size: 18),
-                backgroundColor: isSelected
-                    ? _brandOrange.withValues(alpha: 0.12)
-                    : null,
+                backgroundColor:
+                    isSelected ? _brandOrange.withValues(alpha: 0.12) : null,
                 labelStyle: TextStyle(
                   color: isSelected ? _brandOrange : null,
                   fontWeight: isSelected ? FontWeight.w900 : null,
@@ -2364,15 +2395,21 @@ class _CategoryScreenState extends State<CategoryScreen> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 12),
-          const _FeatureBoardTile(
-            icon: Icons.flight,
-            title: '해주세요',
-            body: '한국과 태국을 오가는 사람이 필요한 물건을 전달하고, 요청자가 수수료를 먼저 제안합니다.',
-          ),
-          const _FeatureBoardTile(
-            icon: Icons.currency_exchange,
-            title: '화폐 교환',
-            body: '여행 후 남은 소액의 바트와 원화를 사용자끼리 교환하는 게시판입니다.',
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              ActionChip(
+                label: Text(ListingType.request.label),
+                avatar: Icon(ListingType.request.icon, size: 18),
+                onPressed: () => widget.onTypeSelected(ListingType.request),
+              ),
+              ActionChip(
+                label: Text(ListingType.currency.label),
+                avatar: Icon(ListingType.currency.icon, size: 18),
+                onPressed: () => widget.onTypeSelected(ListingType.currency),
+              ),
+            ],
           ),
           if (_selectedCategory != null) ...[
             const SizedBox(height: 24),
