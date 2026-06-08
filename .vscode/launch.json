@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "nproject (Web 8080)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--web-port=8080",
+        "--web-hostname=localhost"
+      ]
+    },
+    {
+      "name": "nproject (Release Mode)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release"
+    }
+  ]
+}

@@ -145,13 +145,46 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+  String? _selectedHomeCategory;
 
-  late final List<Widget> _pages = [
-    HomeScreen(onWrite: _handleWriteTap),
-    const CategoryScreen(),
-    PostListingScreen(onSubmitSuccess: _moveToHomeTab),
-    const MyPageScreen(),
-  ];
+  void _moveToHomeTab() {
+    if (!mounted) return;
+    setState(() {
+      _index = 0;
+      _selectedHomeCategory = null;
+    });
+  }
+
+  void _handleCategorySelected(String category) {
+    setState(() {
+      _selectedHomeCategory = category;
+      _index = 0;
+    });
+  }
+
+  Future<void> _handleWriteTap() async {
+    if (_currentUserOrNull() == null) {
+      await _promptLoginThenOpen();
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _index = 2);
+  }
+
+  Future<void> _handleDestinationTap(int value) async {
+    if (value == 2 && _currentUserOrNull() == null) {
+      await _promptLoginThenOpen();
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _index = value);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openInitialDeepLink());
+  }
 
   Future<void> _promptLoginThenOpen() async {
     final shouldMoveToLogin = await showDialog<bool>(
@@ -177,35 +210,6 @@ class _AppShellState extends State<AppShell> {
     );
     if (!mounted || shouldMoveToLogin != true) return;
     await _openLoginScreen(context);
-  }
-
-  void _moveToHomeTab() {
-    if (!mounted) return;
-    setState(() => _index = 0);
-  }
-
-  Future<void> _handleWriteTap() async {
-    if (_currentUserOrNull() == null) {
-      await _promptLoginThenOpen();
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _index = 2);
-  }
-
-  Future<void> _handleDestinationTap(int value) async {
-    if (value == 2 && _currentUserOrNull() == null) {
-      await _promptLoginThenOpen();
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _index = value);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _openInitialDeepLink());
   }
 
   Future<void> _openInitialDeepLink() async {
@@ -239,6 +243,16 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final pages = [
+      HomeScreen(
+        onWrite: _handleWriteTap,
+        initialCategory: _selectedHomeCategory,
+      ),
+      CategoryScreen(onCategorySelected: _handleCategorySelected),
+      PostListingScreen(onSubmitSuccess: _moveToHomeTab),
+      const MyPageScreen(),
+    ];
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -276,7 +290,7 @@ class _AppShellState extends State<AppShell> {
         }
       },
       child: Scaffold(
-        body: _pages[_index],
+        body: pages[_index],
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           indicatorColor: _brandOrange.withValues(alpha: 0.12),
@@ -310,9 +324,10 @@ class _AppShellState extends State<AppShell> {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({required this.onWrite, super.key});
+  const HomeScreen({required this.onWrite, this.initialCategory, super.key});
 
   final VoidCallback onWrite;
+  final String? initialCategory;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -322,6 +337,20 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showOnlyActive = false;
   String? _selectedCategory;
   ListingType? _selectedType;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCategory = widget.initialCategory;
+  }
+
+  @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialCategory != oldWidget.initialCategory) {
+      _selectedCategory = widget.initialCategory;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2286,7 +2315,8 @@ class _MessageBubble extends StatelessWidget {
 }
 
 class CategoryScreen extends StatefulWidget {
-  const CategoryScreen({super.key});
+  const CategoryScreen({required this.onCategorySelected, super.key});
+  final ValueChanged<String> onCategorySelected;
 
   @override
   State<CategoryScreen> createState() => _CategoryScreenState();
@@ -2322,11 +2352,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
                   color: isSelected ? _brandOrange : null,
                   fontWeight: isSelected ? FontWeight.w900 : null,
                 ),
-                onPressed: () => setState(() {
-                  _selectedCategory = _selectedCategory == category
-                      ? null
-                      : category;
-                }),
+                onPressed: () {
+                  widget.onCategorySelected(category);
+                },
               );
             }).toList(),
           ),
@@ -5636,17 +5664,12 @@ class MarketListing {
 const categories = [
   '디지털기기',
   '생활가전',
-  '가구/인테리어',
-  '생활/주방',
-  '유아동',
-  '여성패션/잡화',
-  '남성패션/잡화',
-  '뷰티/미용',
-  '스포츠/레저',
-  '취미/게임/음반',
-  '도서',
-  '반려동물용품',
-  '회원권',
+  '의류 / 잡화',
+  '가구 / 인테리어',
+  '자동차 / 바이크',
+  '차량 용품',
+  '스포츠 / 레저',
+  '도서 / 티켓 / 취미',
   '기타 중고물품',
 ];
 
@@ -5676,7 +5699,7 @@ const sampleListings = [
     id: 'membership',
     type: ListingType.used,
     title: '파타야 헬스장 회원권 2개월 양도',
-    category: '회원권',
+    category: '기타 중고물품',
     price: '1,200 THB',
     place: '파타야',
     placeNote: '터미널21 근처 헬스장',
