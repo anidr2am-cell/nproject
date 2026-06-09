@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -3702,7 +3702,7 @@ Future<void> _signInWithGoogle() async {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: Image.asset(
-                  'assets/images/login_bg.png',
+                  'assets/images/login.png',
                   fit: BoxFit.cover,
                 ),
               ),
