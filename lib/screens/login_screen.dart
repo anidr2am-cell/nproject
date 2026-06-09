@@ -1,9 +1,17 @@
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../constants/colors.dart';
-import '../services/firebase_service.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_core/firebase_core.dart';
 import 'auth_screen.dart';
+
+const _brandOrange = Color(0xFFFF6F0F);
+const _ink = Color(0xFF222222);
+const _muted = Color(0xFF767676);
+const _surface = Color(0xFFF7F8FA);
+const _firebaseRequestTimeout = Duration(seconds: 15);
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,6 +28,60 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isGoogleSubmitting = false;
 
   @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      FirebaseAuth.instance.getRedirectResult().then((result) {
+        if (result.user != null && mounted) {
+          _showMessage('援ш? 濡쒓렇?몃릺?덉뒿?덈떎.');
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+        }
+      }).catchError((e) {
+        debugPrint('[LoginScreen] Redirect result error: $e');
+      });
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    final unavailableMessage = _firebaseUnavailableMessage();
+    if (unavailableMessage != null) {
+      _showMessage(unavailableMessage);
+      return;
+    }
+    setState(() => _isGoogleSubmitting = true);
+    try {
+      if (kIsWeb) {
+        await FirebaseAuth.instance.signInWithRedirect(GoogleAuthProvider());
+        return;
+      }
+
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        setState(() => _isGoogleSubmitting = false);
+        return;
+      }
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      await FirebaseAuth.instance.signInWithCredential(credential);
+      if (!mounted) return;
+      _showMessage('援ш? 濡쒓렇?몃릺?덉뒿?덈떎.');
+      Navigator.of(context).pop();
+    } on FirebaseAuthException catch (e) {
+      _showMessage(_firebaseMessage(e));
+    } catch (e) {
+      debugPrint('[LoginScreen] Google Sign-In Error: $e');
+      _showMessage('援ш? 濡쒓렇?몄뿉 ?ㅽ뙣?덉뒿?덈떎.');
+    } finally {
+      if (mounted) setState(() => _isGoogleSubmitting = false);
+    }
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -27,72 +89,84 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String? _required(String? value) {
-    if (value == null || value.trim().isEmpty) return '필수 입력 항목입니다.';
+    if (value == null || value.trim().isEmpty) return '?꾩닔 ?낅젰 ??ぉ?낅땲??';
     return null;
   }
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String? _firebaseUnavailableMessage() {
+    if (Firebase.apps.isNotEmpty) return null;
+    return 'Firebase媛 ?꾩쭅 珥덇린?붾릺吏 ?딆븯?듬땲?? ?좎떆 ???ㅼ떆 ?쒕룄?댁＜?몄슂.';
+  }
+
+  String _firebaseMessage(FirebaseException error) {
+    return switch (error.code) {
+      'invalid-email' => '?대찓???뺤떇???щ컮瑜댁? ?딆뒿?덈떎.',
+      'email-already-in-use' => '?대? 媛?낅맂 ?대찓?쇱엯?덈떎.',
+      'weak-password' => '鍮꾨?踰덊샇媛 ?덈Т ?쏀빀?덈떎. 6?먮━ ?댁긽?쇰줈 ?낅젰?댁＜?몄슂.',
+      'user-not-found' => '媛?낅릺吏 ?딆? ?대찓?쇱엯?덈떎.',
+      'wrong-password' => '鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.',
+      'invalid-credential' => '?대찓???먮뒗 鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.',
+      'operation-not-allowed' => 'Firebase 肄섏넄?먯꽌 ?대찓??鍮꾨?踰덊샇 濡쒓렇?몄쓣 ?쒖꽦?뷀빐二쇱꽭??',
+      'configuration-not-found' =>
+        'Firebase Auth ?ㅼ젙??李얠쓣 ???놁뒿?덈떎. Firebase 肄섏넄 ?ㅼ젙???뺤씤?댁＜?몄슂.',
+      'permission-denied' => 'Firestore 沅뚰븳???놁뒿?덈떎. 蹂댁븞 洹쒖튃???뺤씤?댁＜?몄슂.',
+      'unavailable' => 'Firebase ?쒕쾭???곌껐?????놁뒿?덈떎. ?ㅽ듃?뚰겕 ?곹깭瑜??뺤씤?댁＜?몄슂.',
+      'failed-precondition' => 'Firebase ?ㅼ젙???꾨즺?섏? ?딆븯?듬땲?? 肄섏넄 ?ㅼ젙???뺤씤?댁＜?몄슂.',
+      'not-found' => 'Firebase ?꾨줈?앺듃 ?먮뒗 臾몄꽌瑜?李얠쓣 ???놁뒿?덈떎.',
+      'missing-user' => '?뚯썝 ?뺣낫瑜??앹꽦?섏? 紐삵뻽?듬땲??',
+      _ => error.message ?? 'Firebase ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎. (${error.code})',
+    };
   }
 
   Future<void> _submitLogin() async {
+    debugPrint('[LoginScreen] login button tapped');
     FocusScope.of(context).unfocus();
-    final unavailable = firebaseUnavailableMessage();
-    if (unavailable != null) {
-      _showMessage(unavailable);
+
+    final unavailableMessage = _firebaseUnavailableMessage();
+    if (unavailableMessage != null) {
+      _showMessage(unavailableMessage);
       return;
     }
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      _showMessage('濡쒓렇???뺣낫瑜??낅젰?댁＜?몄슂.');
+      return;
+    }
 
     setState(() => _isSubmitting = true);
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      ).timeout(firebaseRequestTimeout);
+      await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text.trim(),
+          )
+          .timeout(_firebaseRequestTimeout);
       if (!mounted) return;
-      _showMessage('로그인되었습니다.');
+      _showMessage('濡쒓렇?몃릺?덉뒿?덈떎.');
       Navigator.of(context).pop();
-    } on FirebaseAuthException catch (e) {
-      _showMessage(firebaseMessage(e));
-    } catch (e) {
-      debugPrint('[Auth] Email Login Error: $e');
-      _showMessage('로그인 중 오류가 발생했습니다.');
+    } on FirebaseAuthException catch (error, stackTrace) {
+      debugPrint('[LoginScreen] FirebaseAuth error: ${error.code}');
+      debugPrintStack(stackTrace: stackTrace);
+      _showMessage(_firebaseMessage(error));
+    } on TimeoutException catch (error, stackTrace) {
+      debugPrint('[LoginScreen] timeout: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      _showMessage('濡쒓렇???붿껌 ?쒓컙??珥덇낵?섏뿀?듬땲??');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
-    }
-  }
-
-  Future<void> _signInWithGoogle() async {
-    FocusScope.of(context).unfocus();
-    final unavailable = firebaseUnavailableMessage();
-    if (unavailable != null) {
-      _showMessage(unavailable);
-      return;
-    }
-
-    setState(() => _isGoogleSubmitting = true);
-    try {
-      final credential = await signInWithGoogle();
-      if (credential != null && mounted) {
-        _showMessage('Google 계정으로 로그인되었습니다.');
-        Navigator.of(context).pop();
-      }
-    } on FirebaseAuthException catch (e) {
-      _showMessage(firebaseMessage(e));
-    } catch (e) {
-      debugPrint('[Auth] Google Login Error: $e');
-      _showMessage('Google 로그인 중 오류가 발생했습니다.');
-    } finally {
-      if (mounted) setState(() => _isGoogleSubmitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('로그인 / 회원가입')),
+      appBar: AppBar(title: const Text('濡쒓렇??/ ?뚯썝媛??)),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -101,107 +175,94 @@ class _LoginScreenState extends State<LoginScreen> {
             AspectRatio(
               aspectRatio: 1,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Stack(
-                  children: [
-                    Image.asset(
-                      'assets/images/login_bg.png',
-                      width: double.infinity,
-                      height: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withOpacity(0.1),
-                            Colors.black.withOpacity(0.4),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const Center(
-                      child: Text(
-                        'Nproject',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 42,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -1,
-                        ),
-                      ),
-                    ),
-                  ],
+                borderRadius: BorderRadius.circular(4),
+                child: Image.asset(
+                  'assets/images/login.png',
+                  fit: BoxFit.cover,
                 ),
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             TextFormField(
               controller: _emailController,
               validator: _required,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                hintText: '아이디(이메일)',
-                prefixIcon: Icon(Icons.email_outlined),
-              ),
+              decoration: const InputDecoration(hintText: '?꾩씠??),
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _passwordController,
               validator: _required,
               obscureText: true,
-              decoration: const InputDecoration(
-                hintText: '패스워드',
-                prefixIcon: Icon(Icons.lock_outline),
-              ),
+              decoration: const InputDecoration(hintText: '?⑥뒪?뚮뱶'),
             ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: FilledButton(
-                onPressed: _isSubmitting || _isGoogleSubmitting ? null : _submitLogin,
-                style: FilledButton.styleFrom(
-                  backgroundColor: brandOrange,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            const SizedBox(height: 18),
+            FilledButton(
+              onPressed: _isSubmitting ? null : _submitLogin,
+              style: FilledButton.styleFrom(
+                backgroundColor: _brandOrange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                child: _isSubmitting
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('로그인', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: OutlinedButton(
-                onPressed: _isSubmitting || _isGoogleSubmitting ? null : _signInWithGoogle,
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: Colors.grey.shade300),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: _isGoogleSubmitting
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SvgPicture.asset('assets/images/google.svg', width: 20, height: 20),
-                          const SizedBox(width: 12),
-                          const Text('Google로 계속하기', style: TextStyle(color: ink, fontSize: 16)),
-                        ],
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        color: Colors.white,
                       ),
-              ),
+                    )
+                  : const Text('濡쒓렇??),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             Align(
               alignment: Alignment.center,
               child: TextButton(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AuthScreen())),
-                child: const Text('아직 계정이 없나요? 회원가입', style: TextStyle(color: muted)),
+                onPressed: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const AuthScreen())),
+                style: TextButton.styleFrom(
+                  foregroundColor: _ink,
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+                child: const Text('?꾩쭅 怨꾩젙???녿굹?? ?뚯썝媛??),
               ),
+            ),
+            const SizedBox(height: 16),
+            const Row(
+              children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('?먮뒗', style: TextStyle(color: _muted, fontSize: 13)),
+                ),
+                Expanded(child: Divider()),
+              ],
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _isGoogleSubmitting ? null : _signInWithGoogle,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: const BorderSide(color: Color(0xFFDDDDDD)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+              icon: _isGoogleSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : SvgPicture.asset(
+                      'assets/images/google.svg',
+                      width: 20,
+                      height: 20,
+                    ),
+              label: const Text('Google濡?怨꾩냽?섍린', style: TextStyle(color: _ink)),
             ),
           ],
         ),
