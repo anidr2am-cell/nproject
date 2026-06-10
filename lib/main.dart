@@ -16,6 +16,7 @@ const _firebaseRequestTimeout = Duration(seconds: 15);
 bool _firebaseReady = false;
 String? _firebaseInitMessage;
 
+// ↓ 이 부분 전체를 교체
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
