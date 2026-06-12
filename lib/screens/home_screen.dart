@@ -99,17 +99,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       physics: const BouncingScrollPhysics(),
                       itemBuilder: (context, index) {
                         final category = categories[index];
+                        final isAll = index == 0;
                         return FilterChip(
+                          avatar: isAll ? const Icon(Icons.grid_view, size: 18) : null,
                           selected:
-                              _selectedCategory == category ||
-                              (index == 0 && _selectedCategory == null),
+                              isAll ? _selectedCategory == null : _selectedCategory == category,
                           showCheckmark: false,
                           label: Text(category),
                           onSelected: (_) {
                             setState(() {
-                              _selectedCategory = category == categories[0]
-                                  ? null
-                                  : category;
+                              _selectedCategory = isAll ? null : category;
                             });
                           },
                         );
@@ -145,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
               final firestoreListings = snapshot.hasData
                   ? snapshot.data!.docs.map((doc) => listingFromDoc(doc)).toList()
                   : <MarketListing>[];
-              final allListings = [...firestoreListings, ...sampleListings];
+              final allListings = firestoreListings;
               var listings = _showOnlyActive
                   ? allListings.where((l) => l.status == 'active').toList()
                   : allListings;

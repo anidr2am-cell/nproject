@@ -450,17 +450,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       physics: const BouncingScrollPhysics(),
                       itemBuilder: (context, index) {
                         final category = categories[index];
+                        final isAll = index == 0;
                         return FilterChip(
+                          avatar: isAll ? const Icon(Icons.grid_view, size: 18) : null,
                           selected:
-                              _selectedCategory == category ||
-                              (index == 0 && _selectedCategory == null),
+                              isAll ? _selectedCategory == null : _selectedCategory == category,
                           showCheckmark: false,
                           label: Text(category),
                           onSelected: (_) {
                             setState(() {
-                              _selectedCategory = category == categories[0]
-                                  ? null
-                                  : category;
+                              _selectedCategory = isAll ? null : category;
                             });
                           },
                         );
@@ -496,7 +495,7 @@ class _HomeScreenState extends State<HomeScreen> {
               final firestoreListings = snapshot.hasData
                   ? snapshot.data!.docs.map(_listingFromDoc).toList()
                   : <MarketListing>[];
-              final allListings = [...firestoreListings, ...sampleListings];
+              final allListings = firestoreListings;
               var listings = _showOnlyActive
                   ? allListings.where((l) => l.status == 'active').toList()
                   : allListings;
@@ -3272,6 +3271,24 @@ class _AuthScreenState extends State<AuthScreen> {
   String _phoneCountryCode = '+66';
   bool _isSubmitting = false;
 
+  // 약관 동의 상태
+  bool _agreeTerms = false;
+  bool _agreePrivacy = false;
+  bool _agreeNotice = false;
+  bool _agreeMarketing = false;
+
+  bool get _allRequiredAgreed => _agreeTerms && _agreePrivacy && _agreeNotice;
+  bool get _isAllAgreed => _allRequiredAgreed && _agreeMarketing;
+
+  void _toggleAll(bool? value) {
+    setState(() {
+      _agreeTerms = value ?? false;
+      _agreePrivacy = value ?? false;
+      _agreeNotice = value ?? false;
+      _agreeMarketing = value ?? false;
+    });
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -3329,6 +3346,11 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
+    if (!_allRequiredAgreed) {
+      _showMessage('필수 약관에 모두 동의해주세요.');
+      return;
+    }
+
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) {
       debugPrint('[AuthScreen] validation failed');
@@ -3369,6 +3391,12 @@ class _AuthScreenState extends State<AuthScreen> {
             'lineId': _lineController.text.trim(),
             'phoneCountryCode': _phoneCountryCode,
             'phone': _phoneController.text.trim(),
+            'termsAccepted': true,
+            'privacyAccepted': true,
+            'noticeAccepted': true,
+            'marketingAccepted': _agreeMarketing,
+            'acceptedAt': FieldValue.serverTimestamp(),
+            'termsVersion': '1.0',
             'createdAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true))
@@ -3425,14 +3453,14 @@ class _AuthScreenState extends State<AuthScreen> {
               decoration: const InputDecoration(hintText: '실명 입력'),
             ),
             const SizedBox(height: 18),
-            const _InputLabel('닉네임'),
+            const _InputLabel('닉네임', isRequired: true),
             TextFormField(
               controller: _nicknameController,
               validator: _required,
               decoration: const InputDecoration(hintText: '앱에 표시될 이름'),
             ),
             const SizedBox(height: 18),
-            const _InputLabel('이메일 ID'),
+            const _InputLabel('이메일 ID', isRequired: true),
             TextFormField(
               controller: _emailController,
               validator: _emailValidator,
@@ -3440,7 +3468,7 @@ class _AuthScreenState extends State<AuthScreen> {
               decoration: const InputDecoration(hintText: 'example@email.com'),
             ),
             const SizedBox(height: 18),
-            const _InputLabel('비밀번호'),
+            const _InputLabel('비밀번호', isRequired: true),
             TextFormField(
               controller: _passwordController,
               validator: _passwordValidator,
@@ -3486,9 +3514,58 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 32),
+            const Text(
+              '약관 동의',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFEDEDED)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  CheckboxListTile(
+                    title: const Text('전체 동의', style: TextStyle(fontWeight: FontWeight.bold)),
+                    value: _isAllAgreed,
+                    onChanged: _toggleAll,
+                    activeColor: _brandOrange,
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                  const Divider(height: 1),
+                  _TermsAccordion(
+                    title: '[필수] 서비스 이용약관 동의',
+                    content: _serviceTermsText,
+                    value: _agreeTerms,
+                    onChanged: (v) => setState(() => _agreeTerms = v ?? false),
+                  ),
+                  _TermsAccordion(
+                    title: '[필수] 개인정보 처리방침 동의',
+                    content: _privacyPolicyText,
+                    value: _agreePrivacy,
+                    onChanged: (v) => setState(() => _agreePrivacy = v ?? false),
+                  ),
+                  _TermsAccordion(
+                    title: '[필수] 거래 주의사항 동의',
+                    content: _transactionNoticeText,
+                    value: _agreeNotice,
+                    onChanged: (v) => setState(() => _agreeNotice = v ?? false),
+                  ),
+                  _TermsAccordion(
+                    title: '[선택] 마케팅 정보 수신 동의',
+                    content: _marketingConsentText,
+                    value: _agreeMarketing,
+                    onChanged: (v) => setState(() => _agreeMarketing = v ?? false),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _isSubmitting ? null : _submitSignUp,
+              onPressed:
+                  _isSubmitting || !_allRequiredAgreed ? null : _submitSignUp,
               style: FilledButton.styleFrom(
                 backgroundColor: _brandOrange,
                 foregroundColor: Colors.white,
@@ -3619,7 +3696,34 @@ Future<void> _signInWithGoogle() async {
       accessToken: googleAuth.accessToken,
       idToken: googleAuth.idToken,
     );
-    await FirebaseAuth.instance.signInWithCredential(credential);
+    final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+    final user = userCredential.user;
+
+    if (user != null && mounted) {
+      // Firestore에서 약관 동의 여부 확인
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get()
+          .timeout(_firebaseRequestTimeout);
+
+      if (!mounted) return;
+
+      final data = userDoc.data();
+      if (data == null || data['termsAccepted'] != true) {
+        // 약관 미동의 시 동의 화면으로 이동
+        final agreed = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (_) => TermsAgreementScreen(user: user)),
+        );
+        if (agreed != true && mounted) {
+          // 동의 안 하고 이탈 시 로그아웃 처리
+          await FirebaseAuth.instance.signOut();
+          _showMessage('약관에 동의해야 서비스 이용이 가능합니다.');
+          return;
+        }
+      }
+    }
+
     if (!mounted) return;
     _showMessage('구글 로그인되었습니다.');
     Navigator.of(context).pop();
@@ -5264,17 +5368,32 @@ class _ProfileSection extends StatelessWidget {
 }
 
 class _InputLabel extends StatelessWidget {
-  const _InputLabel(this.text);
+  const _InputLabel(this.text, {this.isRequired = false});
 
   final String text;
+  final bool isRequired;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            text,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+          ),
+          if (isRequired)
+            const Text(
+              ' (필수)',
+              style: TextStyle(
+                color: Colors.red,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -5700,6 +5819,7 @@ class MarketListing {
 }
 
 const categories = [
+  '전체보기',
   '디지털기기',
   '생활가전',
   '의류 / 잡화',
@@ -5711,99 +5831,267 @@ const categories = [
   '기타 중고물품',
 ];
 
-const sampleListings = [
-  MarketListing(
-    id: 'iphone14',
-    type: ListingType.used,
-    title: '아이폰 14 프로 256GB 딥퍼플',
-    category: '디지털기기',
-    price: '24,000 THB',
-    place: '파타야',
-    placeNote: '파타야 힐튼호텔 앞',
-    postedAgo: '방금 전',
-    sellerNickname: '하늘상점',
-    tradeCount: 12,
-    description:
-        '한국에서 구매했고 케이스와 필름을 계속 사용했습니다. 배터리 성능 88%, 박스와 케이블 같이 드립니다. 직거래만 희망합니다.',
-    icon: Icons.phone_iphone,
-    color: Color(0xFF6750A4),
-    photoCount: 5,
-    contactNote: '카카오톡 ID 공개 가능',
-    kakaoId: 'nproject_th',
-    lineId: 'nproject.line',
-    previousTrades: ['갤럭시 워치 5 판매 완료', '소니 헤드폰 거래 완료', '아이패드 미니 판매 완료'],
-  ),
-  MarketListing(
-    id: 'membership',
-    type: ListingType.used,
-    title: '파타야 헬스장 회원권 2개월 양도',
-    category: '기타 중고물품',
-    price: '1,200 THB',
-    place: '파타야',
-    placeNote: '터미널21 근처 헬스장',
-    postedAgo: '8분 전',
-    sellerNickname: '운동하는곰',
-    tradeCount: 4,
-    description: '귀국 일정 때문에 남은 회원권을 양도합니다. 양도 가능 여부 확인 완료했습니다.',
-    icon: Icons.card_membership,
-    color: Color(0xFF455A64),
-    photoCount: 2,
-    previousTrades: ['요가매트 판매 완료', '러닝화 거래 완료'],
-  ),
-  MarketListing(
-    id: 'delivery-request',
-    type: ListingType.request,
-    title: '서울에서 방콕 오시는 분, 영양제 부탁드려요',
-    category: '해주세요',
-    price: '수수료 700 THB 제안',
-    place: '방콕',
-    placeNote: '프롬퐁 BTS 근처',
-    postedAgo: '31분 전',
-    sellerNickname: '프롬퐁맘',
-    tradeCount: 3,
-    description:
-        '서울 가족 집에 맡겨둔 작은 영양제 2통입니다. 무게 가볍고 포장 완료되어 있습니다. 방콕 도착 후 프롬퐁에서 받을 수 있어요.',
-    icon: Icons.luggage_outlined,
-    color: Color(0xFFE16A54),
-    photoCount: 2,
-    contactNote: '라인 ID로 연락 희망',
-    lineId: 'prompong_mom',
-    previousTrades: ['아기 옷 전달 요청 완료', '한국 과자 배송 요청 완료'],
-  ),
-  MarketListing(
-    id: 'currency-baht',
-    type: ListingType.currency,
-    title: '남은 바트 3,200 THB를 원화로 교환 원해요',
-    category: '화폐 교환',
-    price: '3,200 THB',
-    place: '치앙마이',
-    placeNote: '님만해민 마야몰 1층',
-    postedAgo: '1시간 전',
-    sellerNickname: '치앙마이달',
-    tradeCount: 5,
-    description: '여행 후 남은 소액 바트입니다. 직접 만나서 금액 확인하고 서로 편한 기준으로 교환하고 싶습니다.',
-    icon: Icons.payments_outlined,
-    color: Color(0xFF2F80ED),
-    photoCount: 1,
-    kakaoId: 'chiangmai_moon',
-    previousTrades: ['소액 바트 교환 완료', '한국 계좌 이체 거래 완료'],
-  ),
-  MarketListing(
-    id: 'buy-iphone15',
-    type: ListingType.used,
-    tradeType: 'buy',
-    title: '아이폰 15 Pro 256GB 삽니다',
-    category: '디지털기기',
-    price: '희망가 22,000 THB',
-    place: '방콕',
-    placeNote: '아속역 ~ 프롬퐁 가능',
-    postedAgo: '12분 전',
-    sellerNickname: '방콕라이프',
-    tradeCount: 7,
-    description: '블랙 또는 네이비 색상 희망합니다. 기능 이상 없는 제품이면 생활기스는 괜찮습니다.',
-    icon: Icons.shopping_bag_outlined,
-    color: Color(0xFFEF6C00),
-    photoCount: 0,
-    previousTrades: ['에어팟 프로 구매 완료', '아이패드 거래 완료'],
-  ),
-];
+const sampleListings = <MarketListing>[];
+
+// --- 약관 전문 상수 ---
+
+const _serviceTermsText = """
+제1조 (목적)
+본 약관은 서비스 제공자가 운영하는 플랫폼 서비스의 이용과 관련하여 서비스 제공자와 회원 간의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.
+
+제2조 (회원가입)
+회원은 본 약관에 동의한 후 회원가입 절차를 완료함으로써 서비스를 이용할 수 있습니다.
+
+제3조 (서비스 제공)
+본 서비스는 여행, 교통, 골프, 관광, 숙박, 맛집, 중고거래, 커뮤니티 및 기타 관련 정보를 제공하는 온라인 플랫폼입니다.
+
+제4조 (회원의 의무)
+회원은 다음 행위를 하여서는 안 됩니다.
+* 허위 정보 등록
+* 타인 정보 도용
+* 서비스 운영 방해 행위
+* 법령 위반 행위
+* 사기 또는 기만 행위
+* 타 회원에게 피해를 주는 행위
+
+제5조 (서비스 변경 및 중단)
+서비스 제공자는 운영상 또는 기술상의 필요에 따라 서비스의 일부 또는 전부를 변경하거나 중단할 수 있습니다.
+
+제6조 (면책)
+서비스는 플랫폼 제공자이며 회원 간 거래의 당사자가 아닙니다.
+회원 간 거래, 예약, 계약, 결제 및 분쟁에 대해서는 해당 회원이 책임을 부담합니다.
+""";
+
+const _privacyPolicyText = """
+1. 수집하는 개인정보
+서비스는 다음 정보를 수집할 수 있습니다.
+* 이름 또는 닉네임
+* 이메일 주소
+* 휴대전화 번호
+* 프로필 사진
+* 로그인 정보
+* 기기 정보
+* IP 주소
+* 서비스 이용 기록
+* 예약 및 거래 기록
+
+2. 개인정보 수집 목적
+수집된 개인정보는 다음 목적에 사용됩니다.
+* 회원 식별 및 본인 확인
+* 서비스 제공 및 운영
+* 예약 및 거래 처리
+* 고객 문의 응대
+* 서비스 개선
+* 부정 이용 방지
+* 법령상 의무 이행
+
+3. 개인정보 보관 기간
+개인정보는 회원 탈퇴 시 원칙적으로 삭제됩니다.
+단, 관련 법령에 따라 일정 기간 보관이 필요한 경우 해당 기간 동안 보관될 수 있습니다.
+
+4. 개인정보 제공
+서비스는 이용자의 동의 없이 개인정보를 제3자에게 판매하거나 제공하지 않습니다.
+다만 법령에 따른 요청이 있는 경우 제공될 수 있습니다.
+
+5. 개인정보 보호
+서비스는 개인정보 보호를 위하여 합리적인 보안 조치를 시행합니다.
+""";
+
+const _transactionNoticeText = """
+본 서비스는 회원 간 거래, 예약, 정보 공유 및 연결을 위한 플랫폼입니다.
+서비스 운영자는 거래의 당사자가 아니며 거래에 직접 개입하지 않습니다.
+회원은 거래 전 상대방의 신원, 상품 상태, 서비스 내용, 예약 조건, 결제 조건 및 기타 거래 정보를 직접 확인하여야 합니다.
+
+다음 사항에 대한 책임은 거래 당사자에게 있습니다.
+* 금전 거래 분쟁
+* 예약 취소 분쟁
+* 환불 관련 분쟁
+* 상품 및 서비스 품질 문제
+* 허위 정보로 인한 피해
+* 계약 불이행
+* 사기 행위로 인한 피해
+* 기타 회원 간 발생하는 모든 민사 및 형사상 분쟁
+
+서비스 운영자는 회원 간 거래에서 발생하는 손해, 사고, 분쟁 또는 계약상의 문제에 대해 책임을 지지 않습니다.
+회원은 위 내용을 충분히 이해하고 이에 동의한 후 서비스를 이용합니다.
+""";
+
+const _marketingConsentText = """
+회원은 이벤트, 프로모션, 할인 정보, 신규 서비스 안내 등 마케팅 정보를 이메일, 문자메시지, 앱 푸시 알림 등의 방법으로 수신할 수 있습니다.
+회원은 언제든지 수신 동의를 철회할 수 있습니다.
+""";
+
+// --- 약관 관련 헬퍼 위젯 ---
+
+class _TermsAccordion extends StatelessWidget {
+  const _TermsAccordion({
+    required this.title,
+    required this.content,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String content;
+  final bool value;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExpansionTile(
+      title: Row(
+        children: [
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: Checkbox(
+              value: value,
+              onChanged: onChanged,
+              activeColor: _brandOrange,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(title, style: const TextStyle(fontSize: 14))),
+        ],
+      ),
+      trailing: const Icon(Icons.keyboard_arrow_down, size: 20),
+      shape: const Border(),
+      childrenPadding: const EdgeInsets.fromLTRB(48, 0, 20, 16),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            content,
+            style: const TextStyle(fontSize: 12, color: _muted, height: 1.5),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class TermsAgreementScreen extends StatefulWidget {
+  const TermsAgreementScreen({required this.user, super.key});
+  final User user;
+
+  @override
+  State<TermsAgreementScreen> createState() => _TermsAgreementScreenState();
+}
+
+class _TermsAgreementScreenState extends State<TermsAgreementScreen> {
+  bool _agreeTerms = false;
+  bool _agreePrivacy = false;
+  bool _agreeNotice = false;
+  bool _agreeMarketing = false;
+  bool _isSubmitting = false;
+
+  bool get _allRequiredAgreed => _agreeTerms && _agreePrivacy && _agreeNotice;
+  bool get _isAllAgreed => _allRequiredAgreed && _agreeMarketing;
+
+  void _toggleAll(bool? value) {
+    setState(() {
+      _agreeTerms = value ?? false;
+      _agreePrivacy = value ?? false;
+      _agreeNotice = value ?? false;
+      _agreeMarketing = value ?? false;
+    });
+  }
+
+  Future<void> _submit() async {
+    if (!_allRequiredAgreed) return;
+    setState(() => _isSubmitting = true);
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set({
+        'termsAccepted': true,
+        'privacyAccepted': true,
+        'noticeAccepted': true,
+        'marketingAccepted': _agreeMarketing,
+        'acceptedAt': FieldValue.serverTimestamp(),
+        'termsVersion': '1.0',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      debugPrint('[TermsAgreementScreen] failed: $e');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('약관 동의')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text(
+            '서비스 이용을 위해\\n약관에 동의해주세요.',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 32),
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFEDEDED)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
+                CheckboxListTile(
+                  title: const Text('전체 동의', style: TextStyle(fontWeight: FontWeight.bold)),
+                  value: _isAllAgreed,
+                  onChanged: _toggleAll,
+                  activeColor: _brandOrange,
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                const Divider(height: 1),
+                _TermsAccordion(
+                  title: '[필수] 서비스 이용약관 동의',
+                  content: _serviceTermsText,
+                  value: _agreeTerms,
+                  onChanged: (v) => setState(() => _agreeTerms = v ?? false),
+                ),
+                _TermsAccordion(
+                  title: '[필수] 개인정보 처리방침 동의',
+                  content: _privacyPolicyText,
+                  value: _agreePrivacy,
+                  onChanged: (v) => setState(() => _agreePrivacy = v ?? false),
+                ),
+                _TermsAccordion(
+                  title: '[필수] 거래 주의사항 동의',
+                  content: _transactionNoticeText,
+                  value: _agreeNotice,
+                  onChanged: (v) => setState(() => _agreeNotice = v ?? false),
+                ),
+                _TermsAccordion(
+                  title: '[선택] 마케팅 정보 수신 동의',
+                  content: _marketingConsentText,
+                  value: _agreeMarketing,
+                  onChanged: (v) => setState(() => _agreeMarketing = v ?? false),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          FilledButton(
+            onPressed: _allRequiredAgreed && !_isSubmitting ? _submit : null,
+            style: FilledButton.styleFrom(
+              backgroundColor: _brandOrange,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            child: _isSubmitting
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text('동의 완료'),
+          ),
+        ],
+      ),
+    );
+  }
+}
