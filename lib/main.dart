@@ -4175,10 +4175,10 @@ void _showContactSupport(BuildContext context) {
                 color: _brandOrange,
               ),
               title: const Text('카카오톡 문의'),
-              subtitle: const Text('카카오톡 ID: your_kakao_id'),
+              subtitle: const Text('오픈채팅으로 문의하기'),
               onTap: () async {
                 final uri = Uri.parse(
-                  'https://open.kakao.com/o/your_open_chat_link',
+                  'https://open.kakao.com/o/sftQLozi',
                 );
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -4190,9 +4190,9 @@ void _showContactSupport(BuildContext context) {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.chat_outlined, color: _brandOrange),
               title: const Text('라인 문의'),
-              subtitle: const Text('라인 ID: your_line_id'),
+              subtitle: const Text('라인으로 문의하기'),
               onTap: () async {
-                final uri = Uri.parse('https://line.me/ti/p/your_line_id');
+                final uri = Uri.parse('https://line.me/ti/g2/-CCiaKCx87hclDxnFulTVvqLKshaAOdn0NtXnQ?utm_source=invitation&utm_medium=link_copy&utm_campaign=default');
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 }
