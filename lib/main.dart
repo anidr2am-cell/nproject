@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'firebase_options.dart';
@@ -16,7 +17,6 @@ const _firebaseRequestTimeout = Duration(seconds: 15);
 bool _firebaseReady = false;
 String? _firebaseInitMessage;
 
-// ↓ 이 부분 전체를 교체
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -26,6 +26,11 @@ Future<void> main() async {
     _firebaseReady = Firebase.apps.isNotEmpty;
     _firebaseInitMessage = null;
     debugPrint('[Firebase] initializeApp success');
+
+    if (_firebaseReady) {
+      // FCM 초기화
+      await _initFcm();
+    }
   } on FirebaseException catch (error, stackTrace) {
     _firebaseReady = false;
     _firebaseInitMessage = _firebaseMessage(error);
@@ -1862,6 +1867,7 @@ Future<void> _createUserNotification({
   }
 
   try {
+    // 인앱 알림 생성
     await FirebaseFirestore.instance
         .collection('users')
         .doc(recipientUid)
@@ -1877,9 +1883,93 @@ Future<void> _createUserNotification({
           'createdAt': FieldValue.serverTimestamp(),
         })
         .timeout(_firebaseRequestTimeout);
+
+    // FCM 푸시 큐에 추가
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(recipientUid)
+        .get()
+        .timeout(_firebaseRequestTimeout);
+    final fcmToken = _stringValue(userDoc.data()?['fcmToken'], '');
+
+    if (fcmToken.isNotEmpty) {
+      await FirebaseFirestore.instance.collection('fcmQueue').add({
+        'token': fcmToken,
+        'title': title,
+        'body': body,
+        'data': {
+          'type': type,
+          'listingId': listingId ?? '',
+          'chatRoomId': chatRoomId ?? '',
+        },
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
   } catch (error, stackTrace) {
     debugPrint('[Notification] create failed: $error');
     debugPrintStack(stackTrace: stackTrace);
+  }
+}
+
+Future<void> _initFcm() async {
+  try {
+    final messaging = FirebaseMessaging.instance;
+
+    // 권한 요청 (웹 브라우저 팝업)
+    final settings = await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      debugPrint('[FCM] User granted permission');
+
+      // VAPID 키를 사용하여 토큰 발급
+      final token = await messaging.getToken(
+        vapidKey: 'BGo24wJvy1RQvtccNfsP1Zwu5LqStL3-XYxlkgcVQFc_jSth8lIR-cK3HfkILD4eWW3Xt8fO3mfIxD7LdgJHL2A',
+      );
+
+      if (token != null) {
+        debugPrint('[FCM] Token: $token');
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await _saveFcmToken(user.uid, token);
+        }
+
+        // 토큰 갱신 리스너
+        messaging.onTokenRefresh.listen((newToken) async {
+          final currentUser = FirebaseAuth.instance.currentUser;
+          if (currentUser != null) {
+            await _saveFcmToken(currentUser.uid, newToken);
+          }
+        });
+      }
+    } else {
+      debugPrint('[FCM] User declined or has not accepted permission');
+    }
+
+    // 포그라운드 메시지 수신 핸들러
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('[FCM] Foreground message received: ${message.notification?.title}');
+      // 인앱 알림이 이미 Firestore 스트림을 통해 상단 뱃지에 반영되므로,
+      // 여기서는 스낵바 등으로 추가 알림을 보여줄 수 있습니다.
+    });
+  } catch (e) {
+    debugPrint('[FCM] initialization failed: $e');
+  }
+}
+
+Future<void> _saveFcmToken(String uid, String token) async {
+  try {
+    await FirebaseFirestore.instance.collection('users').doc(uid).update({
+      'fcmToken': token,
+      'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+    }).timeout(_firebaseRequestTimeout);
+    debugPrint('[FCM] Token saved to Firestore');
+  } catch (e) {
+    debugPrint('[FCM] Failed to save token: $e');
   }
 }
 
@@ -4683,7 +4773,7 @@ class _ProfileHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  displayName,
+                  user == null ? displayName : '$displayName 님',
                   style: const TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.w900,
@@ -4717,52 +4807,15 @@ class _UserInfoSections extends StatelessWidget {
       );
     }
 
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final data = snapshot.data?.data() ?? {};
-        final nickname = _stringValue(
-          data['nickname'],
-          user!.displayName ?? '',
-        );
-        final location = _stringValue(data['location'], '-');
-        final kakao = _stringValue(data['kakaoId'], '-');
-        final line = _stringValue(data['lineId'], '-');
-        final phoneCode = _stringValue(data['phoneCountryCode'], '');
-        final phone = _stringValue(data['phone'], '-');
-
-        return Column(
-          children: [
-            _ProfileSection(
-              title: '회원 가입 필수 정보',
-              rows: [
-                ('닉네임', nickname),
-                ('이메일 ID', user!.email ?? '-'),
-                ('로그인 상태', '로그인됨'),
-              ],
-            ),
-            const SizedBox(height: 18),
-            _MyChatRoomsSection(userId: user!.uid),
-            const SizedBox(height: 18),
-            _MySellingListingsSection(userId: user!.uid),
-            const SizedBox(height: 18),
-            _MyFavoritesListSection(userId: user!.uid),
-            const SizedBox(height: 18),
-            _ProfileSection(
-              title: '선택 정보',
-              rows: [
-                ('거주지 위치', location),
-                ('카카오톡 ID', kakao),
-                ('라인 ID', line),
-                ('연락처', '$phoneCode $phone'.trim()),
-              ],
-            ),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _MyChatRoomsSection(userId: user!.uid),
+        const SizedBox(height: 18),
+        _MySellingListingsSection(userId: user!.uid),
+        const SizedBox(height: 18),
+        _MyFavoritesListSection(userId: user!.uid),
+      ],
     );
   }
 }
@@ -4987,6 +5040,7 @@ class _ChatRoomsPanel extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Container(
+          width: double.infinity,
           decoration: BoxDecoration(
             border: Border.all(color: const Color(0xFFEDEDED)),
             borderRadius: BorderRadius.circular(8),
@@ -5112,6 +5166,7 @@ class _MyPageListingSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Container(
+          width: double.infinity,
           decoration: BoxDecoration(
             border: Border.all(color: const Color(0xFFEDEDED)),
             borderRadius: BorderRadius.circular(8),
@@ -5341,6 +5396,7 @@ class _ProfileSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Container(
+          width: double.infinity,
           decoration: BoxDecoration(
             border: Border.all(color: const Color(0xFFEDEDED)),
             borderRadius: BorderRadius.circular(8),
@@ -5700,6 +5756,24 @@ ListingType _listingTypeFromValue(Object? value) {
   );
 }
 
+String _getTimeAgo(dynamic createdAt) {
+  if (createdAt == null) return '방금 전';
+
+  DateTime? dateTime;
+  if (createdAt is Timestamp) {
+    dateTime = createdAt.toDate();
+  } else if (createdAt is DateTime) {
+    dateTime = createdAt;
+  }
+
+  if (dateTime == null) return '방금 전';
+
+  final diff = DateTime.now().difference(dateTime);
+  if (diff.inHours < 1) return '방금 전';
+  if (diff.inHours < 24) return '${diff.inHours}시간 전';
+  return '${diff.inDays}일 전';
+}
+
 MarketListing _listingFromFirestoreData(String id, Map<String, dynamic> data) {
   final type = _listingTypeFromValue(data['type']);
   final place = _stringValue(data['place'], '위치 미입력');
@@ -5715,7 +5789,7 @@ MarketListing _listingFromFirestoreData(String id, Map<String, dynamic> data) {
     price: _stringValue(data['price'], '가격 미입력'),
     place: place,
     placeNote: place,
-    postedAgo: '방금 전',
+    postedAgo: _getTimeAgo(data['createdAt']),
     sellerNickname: seller,
     sellerUid: sellerUid.isEmpty ? null : sellerUid,
     status: _stringValue(data['status'], 'active'),
