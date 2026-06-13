@@ -822,9 +822,11 @@ class _NotificationTile extends StatelessWidget {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: isRead
-          ? null
-          : Container(
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!isRead)
+            Container(
               width: 8,
               height: 8,
               decoration: const BoxDecoration(
@@ -832,6 +834,15 @@ class _NotificationTile extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
             ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 20, color: _muted),
+            onPressed: () => _deleteNotification(
+              _currentUserOrNull()!.uid,
+              notification.id,
+            ),
+          ),
+        ],
+      ),
       onTap: () => _openTarget(context),
     );
   }
@@ -1917,6 +1928,56 @@ Future<void> _createUserNotification({
   }
 }
 
+Future<void> _deleteNotification(String userId, String notificationId) async {
+  if (_firebaseUnavailableMessage() != null) return;
+  try {
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .doc(notificationId)
+        .delete()
+        .timeout(_firebaseRequestTimeout);
+  } catch (e) {
+    debugPrint('[Notification] delete failed: $e');
+  }
+}
+
+Future<void> _deleteChatNotifications(String userId, String chatRoomId) async {
+  if (_firebaseUnavailableMessage() != null) return;
+  try {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .where('type', isEqualTo: 'chat')
+        .where('chatRoomId', isEqualTo: chatRoomId)
+        .get()
+        .timeout(_firebaseRequestTimeout);
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (var doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  } catch (e) {
+    debugPrint('[Notification] _deleteChatNotifications failed: $e');
+  }
+}
+
+Future<void> _deleteChatRoom(String roomId) async {
+  if (_firebaseUnavailableMessage() != null) return;
+  try {
+    await FirebaseFirestore.instance
+        .collection('chatRooms')
+        .doc(roomId)
+        .delete()
+        .timeout(_firebaseRequestTimeout);
+  } catch (e) {
+    debugPrint('[ChatRoom] delete failed: $e');
+  }
+}
+
 Future<void> _initFcm() async {
   try {
     print('[FCM] 1. _initFcm 시작');
@@ -2207,7 +2268,24 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     final listing = widget.listing;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.otherUserName ?? '채팅')),
+      appBar: AppBar(
+        title: Text(widget.otherUserName ?? '채팅'),
+        actions: [
+          IconButton(
+            tooltip: '나가기',
+            onPressed: () async {
+              final user = _currentUserOrNull();
+              if (user != null) {
+                await _deleteChatNotifications(user.uid, widget.roomId);
+              }
+              if (context.mounted) {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              }
+            },
+            icon: const Icon(Icons.exit_to_app),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           if (listing != null) _ChatListingHeader(listing: listing),
@@ -3696,6 +3774,68 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
+class _RecentNotificationsSection extends StatelessWidget {
+  const _RecentNotificationsSection({required this.user});
+
+  final User user;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '최근 알림',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFEDEDED)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('notifications')
+                .orderBy('createdAt', descending: true)
+                .limit(5)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              final docs = snapshot.data?.docs ?? [];
+              if (docs.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('최근 알림이 없습니다.', style: TextStyle(color: _muted)),
+                );
+              }
+
+              return Column(
+                children: [
+                  for (var i = 0; i < docs.length; i++) ...[
+                    if (i > 0)
+                      const Divider(height: 1, color: Color(0xFFEDEDED)),
+                    _NotificationTile(notification: docs[i]),
+                  ],
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class MyPageScreen extends StatelessWidget {
   const MyPageScreen({super.key});
 
@@ -3724,6 +3864,10 @@ class MyPageScreen extends StatelessWidget {
             children: [
               _ProfileHeader(user: user),
               const SizedBox(height: 18),
+              if (user != null) ...[
+                _RecentNotificationsSection(user: user),
+                const SizedBox(height: 18),
+              ],
               if (user == null) ...[
                 FilledButton.icon(
                   onPressed: () => _openLoginScreen(context),
@@ -5138,7 +5282,37 @@ class _ChatRoomTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(color: _muted),
       ),
-      trailing: const Icon(Icons.chevron_right, color: _muted),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.close, size: 20, color: _muted),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('채팅방 삭제'),
+                  content: const Text('채팅방을 삭제하시겠습니까?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('취소'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('삭제'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                await _deleteChatRoom(room.id);
+              }
+            },
+          ),
+          const Icon(Icons.chevron_right, color: _muted),
+        ],
+      ),
       onTap: () async {
         final listingId = _stringValue(data['listingId'], '');
         final listing = listingId.isEmpty

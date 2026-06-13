@@ -93,7 +93,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             children: [
               const Spacer(),
               FilledButton(
-                onPressed: () {},
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => ChatRoomScreen(chatRoomId: _listing.id)),
+                ),
                 style: FilledButton.styleFrom(backgroundColor: brandOrange),
                 child: const Text('채팅하기'),
               ),

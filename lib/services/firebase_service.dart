@@ -125,6 +125,43 @@ Future<void> createUserNotification({
   }
 }
 
+Future<void> deleteNotification(String userId, String notificationId) async {
+  if (firebaseUnavailableMessage() != null) return;
+  try {
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .doc(notificationId)
+        .delete()
+        .timeout(firebaseRequestTimeout);
+  } catch (e) {
+    debugPrint('[Notification] delete failed: $e');
+  }
+}
+
+Future<void> deleteChatNotifications(String userId, String chatRoomId) async {
+  if (firebaseUnavailableMessage() != null) return;
+  try {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .where('type', isEqualTo: 'chat')
+        .where('chatRoomId', isEqualTo: chatRoomId)
+        .get()
+        .timeout(firebaseRequestTimeout);
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (var doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  } catch (e) {
+    debugPrint('[Notification] deleteChatNotifications failed: $e');
+  }
+}
+
 String stringValue(Object? value, String fallback) {
   if (value == null) return fallback;
   final text = value.toString().trim();

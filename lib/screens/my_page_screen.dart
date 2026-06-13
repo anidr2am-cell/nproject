@@ -56,11 +56,57 @@ class MyPageScreen extends StatelessWidget {
             children: [
               _buildProfileHeader(user),
               const Divider(height: 1, color: surface),
+              _buildNotificationSection(user),
+              const Divider(height: 1, color: surface),
               _buildActionList(context),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildNotificationSection(User user) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
+          child: Text('최근 알림', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        ),
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('notifications')
+              .orderBy('createdAt', descending: true)
+              .limit(5)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Text('알림이 없습니다.', style: TextStyle(color: muted)),
+              );
+            }
+
+            return Column(
+              children: snapshot.data!.docs.map((doc) {
+                final data = doc.data();
+                return ListTile(
+                  dense: true,
+                  title: Text(data['title'] ?? '알림', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(data['body'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.close, size: 18, color: muted),
+                    onPressed: () => deleteNotification(user.uid, doc.id),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
     );
   }
 
