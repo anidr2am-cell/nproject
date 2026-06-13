@@ -1,5 +1,7 @@
 ﻿import 'dart:async';
+import 'dart:html' as html;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -28,8 +30,8 @@ Future<void> main() async {
     debugPrint('[Firebase] initializeApp success');
 
     if (_firebaseReady) {
-      // FCM 초기화
-      await _initFcm();
+      // FCM 초기화 (UI 준비 후 AppShell에서 호출)
+      _initFcm(); 
     }
   } on FirebaseException catch (error, stackTrace) {
     _firebaseReady = false;
@@ -200,7 +202,10 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _openInitialDeepLink());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openInitialDeepLink();
+      _initFcm();
+    });
   }
 
   Future<void> _promptLoginThenOpen() async {
@@ -1914,50 +1919,62 @@ Future<void> _createUserNotification({
 
 Future<void> _initFcm() async {
   try {
-    final messaging = FirebaseMessaging.instance;
+    print('[FCM] 1. _initFcm 시작');
 
-    // 권한 요청 (웹 브라우저 팝업)
-    final settings = await messaging.requestPermission(
+    if (kIsWeb) {
+      // 1. 브라우저 기본 Notification API 사용
+      print('[FCM] 1-1. 웹 브라우저 권한 요청');
+      final result = await html.Notification.requestPermission();
+      print('[FCM] 1-2. 브라우저 권한 결과: $result');
+
+      if (result == 'granted') {
+        // 2. 권한 허용된 경우 토큰 발급
+        final token = await FirebaseMessaging.instance.getToken(
+          vapidKey:
+              'BGo24wJvy1RQvtccNfsP1Zwu5LqStL3-XYxlkgcVQFc_jSth8lIR-cK3HfkILD4eWW3Xt8fO3mfIxD7LdgJHL2A',
+        );
+        print('[FCM] 1-3. 웹 토큰: $token');
+
+        if (token != null) {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            await _saveFcmToken(user.uid, token);
+            print('[FCM] 1-4. 웹 토큰 저장 완료');
+          }
+        }
+      }
+      return; // 웹은 여기서 종료
+    }
+
+    // 권한 요청
+    print('[FCM] 2. 권한 요청 시작');
+    final settings = await FirebaseMessaging.instance.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
+    print('[FCM] 3. 권한 상태: ${settings.authorizationStatus}');
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      debugPrint('[FCM] User granted permission');
+    // 토큰 발급
+    print('[FCM] 4. 토큰 발급 시작');
+    final token = await FirebaseMessaging.instance.getToken(
+      vapidKey:
+          'BGo24wJvy1RQvtccNfsP1Zwu5LqStL3-XYxlkgcVQFc_jSth8lIR-cK3HfkILD4eWW3Xt8fO3mfIxD7LdgJHL2A',
+    );
+    print('[FCM] 5. 토큰: $token');
 
-      // VAPID 키를 사용하여 토큰 발급
-      final token = await messaging.getToken(
-        vapidKey: 'BGo24wJvy1RQvtccNfsP1Zwu5LqStL3-XYxlkgcVQFc_jSth8lIR-cK3HfkILD4eWW3Xt8fO3mfIxD7LdgJHL2A',
-      );
-
-      if (token != null) {
-        debugPrint('[FCM] Token: $token');
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          await _saveFcmToken(user.uid, token);
-        }
-
-        // 토큰 갱신 리스너
-        messaging.onTokenRefresh.listen((newToken) async {
-          final currentUser = FirebaseAuth.instance.currentUser;
-          if (currentUser != null) {
-            await _saveFcmToken(currentUser.uid, newToken);
-          }
-        });
+    if (token != null) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        print('[FCM] 6. 토큰 저장 시작 (UID: ${user.uid})');
+        await _saveFcmToken(user.uid, token);
+        print('[FCM] 7. 토큰 저장 완료');
+      } else {
+        print('[FCM] 6. 토큰 저장 건너뜀: 로그인된 사용자가 없음');
       }
-    } else {
-      debugPrint('[FCM] User declined or has not accepted permission');
     }
-
-    // 포그라운드 메시지 수신 핸들러
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('[FCM] Foreground message received: ${message.notification?.title}');
-      // 인앱 알림이 이미 Firestore 스트림을 통해 상단 뱃지에 반영되므로,
-      // 여기서는 스낵바 등으로 추가 알림을 보여줄 수 있습니다.
-    });
   } catch (e) {
-    debugPrint('[FCM] initialization failed: $e');
+    print('[FCM] 오류 발생: $e');
   }
 }
 
