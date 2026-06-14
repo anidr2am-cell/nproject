@@ -27,45 +27,75 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showOnlyActive = false;
   String? _selectedCategory;
   ListingType? _selectedType;
+  bool _isSearching = false;
+  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: StreamBuilder<User?>(
-          stream: authStateStream(),
-          builder: (context, snapshot) {
-            final user = snapshot.data;
-            if (user == null) {
-              return Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen())),
-                  style: TextButton.styleFrom(
-                    foregroundColor: ink,
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    textStyle: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  child: const Text('로그인'),
+        title: _isSearching
+            ? TextField(
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: '물품명을 입력하세요',
+                  border: InputBorder.none,
                 ),
-              );
-            }
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+              )
+            : StreamBuilder<User?>(
+                stream: authStateStream(),
+                builder: (context, snapshot) {
+                  final user = snapshot.data;
+                  if (user == null) {
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen())),
+                        style: TextButton.styleFrom(
+                          foregroundColor: ink,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          textStyle: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        child: const Text('로그인'),
+                      ),
+                    );
+                  }
 
-            final name = user.displayName?.trim().isNotEmpty == true
-                ? user.displayName!.trim()
-                : '하늘상점';
-            return Text('$name님');
-          },
-        ),
+                  final name = user.displayName?.trim().isNotEmpty == true
+                      ? user.displayName!.trim()
+                      : '하늘상점';
+                  return Text('$name님');
+                },
+              ),
         actions: [
-          IconButton(
-            tooltip: '검색',
-            onPressed: () {},
-            icon: const Icon(Icons.search),
-          ),
+          if (_isSearching)
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () {
+                setState(() {
+                  _isSearching = false;
+                  _searchQuery = '';
+                });
+              },
+            )
+          else
+            IconButton(
+              tooltip: '검색',
+              onPressed: () {
+                setState(() {
+                  _isSearching = true;
+                });
+              },
+              icon: const Icon(Icons.search),
+            ),
           const NotificationIconButton(),
           IconButton(
             tooltip: '설정',
@@ -156,6 +186,13 @@ class _HomeScreenState extends State<HomeScreen> {
               if (_selectedType != null) {
                 listings = listings
                     .where((l) => l.type == _selectedType)
+                    .toList();
+              }
+              if (_searchQuery.trim().isNotEmpty) {
+                listings = listings
+                    .where((l) => l.title
+                        .toLowerCase()
+                        .contains(_searchQuery.trim().toLowerCase()))
                     .toList();
               }
 
