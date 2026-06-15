@@ -44,6 +44,8 @@ dependencies:
   google_sign_in: ^6.2.2        # 異붽?
   google_sign_in_web: ^0.12.4
   flutter_svg: ^2.0.10+1
+  kakao_flutter_sdk_common: ^2.0.0+1
+  kakao_flutter_sdk_user: ^2.0.0+1
 
 dev_dependencies:
   flutter_test:

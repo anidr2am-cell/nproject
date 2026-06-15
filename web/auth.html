@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Kakao Auth</title>
+</head>
+<body>
+    <script>
+        try {
+            // 다양한 플러터 채널 포트 및 도메인 제약을 우회하기 위해 와일드카드(*)로 메시지 전송 보완
+            if (window.opener) {
+                window.opener.postMessage(window.location.href, "*");
+            } else if (window.parent) {
+                window.parent.postMessage(window.location.href, "*");
+            }
+        } catch (e) {
+            console.error("Kakao auth postMessage error:", e);
+        } finally {
+            window.close();
+        }
+    </script>
+</body>
+</html>

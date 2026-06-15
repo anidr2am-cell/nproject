@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao_sdk;
 import 'auth_screen.dart';
 
 const _brandOrange = Color(0xFFFF6F0F);
@@ -31,6 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isKakaoSubmitting = false;
 
   Future<void> _signInWithKakao() async {
+    print('[KAKAO] login start');
     final unavailableMessage = _firebaseUnavailableMessage();
     if (unavailableMessage != null) {
       _showMessage(unavailableMessage);
@@ -39,47 +41,45 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isKakaoSubmitting = true);
     try {
-      final kakao = js_util.getProperty(js_util.globalThis, 'Kakao');
-      final auth = js_util.getProperty(kakao, 'Auth');
+      if (kIsWeb) {
+        print('[KAKAO] initiating redirect login (web)');
+        try {
+          await kakao_sdk.UserApi.instance.loginWithKakaoAccount(
+            redirectUri: 'https://82saja.com'
+          );
+          print('[KAKAO] authorization request sent');
+          return; // 리다이렉트 시 페이지가 이동하므로 이후 코드는 실행되지 않음
+        } catch (error) {
+          print('[KAKAO] exception=$error');
+          debugPrint('웹 카카오 로그인 리다이렉트 요청 실패: $error');
+          _showMessage('카카오 리다이렉트 로그인 실패');
+          return;
+        }
+      }
 
-      final completer = Completer<String>();
-      js_util.callMethod(auth, 'login', [
-        js_util.jsify({
-          'success': js.allowInterop((authObj) {
-            final accessToken = js_util.getProperty(authObj, 'access_token');
-            completer.complete(accessToken);
-          }),
-          'fail': js.allowInterop((err) {
-            completer.completeError(err);
-          }),
-        })
-      ]);
+      kakao_sdk.OAuthToken token;
+      if (!kIsWeb && await kakao_sdk.isKakaoTalkInstalled()) {
+        try {
+          token = await kakao_sdk.UserApi.instance.loginWithKakaoTalk();
+        } catch (error) {
+          debugPrint('카카오톡 로그인 실패, 계정 로그인 시도: $error');
+          token = await kakao_sdk.UserApi.instance.loginWithKakaoAccount();
+        }
+      } else {
+        token = await kakao_sdk.UserApi.instance.loginWithKakaoAccount();
+      }
 
-      final accessToken = await completer.future;
-      final api = js_util.getProperty(kakao, 'API');
-      final userCompleter = Completer<Map<String, dynamic>>();
-
-      js_util.callMethod(api, 'request', [
-        js_util.jsify({
-          'url': '/v2/user/me',
-          'success': js.allowInterop((response) {
-            final id = js_util.getProperty(response, 'id');
-            final properties = js_util.getProperty(response, 'properties');
-            final nickname = js_util.getProperty(properties, 'nickname');
-            userCompleter.complete({'id': id, 'nickname': nickname});
-          }),
-          'fail': js.allowInterop((err) {
-            userCompleter.completeError(err);
-          }),
-        })
-      ]);
-
-      final userInfo = await userCompleter.future;
-      final kakaoId = userInfo['id'].toString();
-      final nickname = userInfo['nickname'] as String;
+      print('[KAKAO] token received');
+      final user = await kakao_sdk.UserApi.instance.me();
+      print('[KAKAO] authorization success');
+      final kakaoId = user.id.toString();
+      final nickname = user.kakaoAccount?.profile?.nickname ?? '카카오 사용자';
+      
       final email = '$kakaoId@kakao.com';
       final password = 'kakao_$kakaoId';
 
+      print('[KAKAO] firebase credential created');
+      print('[KAKAO] starting firebase login');
       UserCredential userCredential;
       try {
         userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -98,12 +98,14 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
 
+      print('[KAKAO] firebase login success');
       if (!mounted) return;
       _showMessage('카카오 로그인되었습니다.');
       Navigator.of(context).pop();
     } catch (e) {
+      print('[KAKAO] exception=$e');
       debugPrint('[LoginScreen] Kakao Login Error: $e');
-      _showMessage('카카오 로그인에 실패했습니다.');
+      _showMessage('카카오 로그인에 실패했습니다. ($e)');
     } finally {
       if (mounted) setState(() => _isKakaoSubmitting = false);
     }

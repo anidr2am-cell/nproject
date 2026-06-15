@@ -10,37 +10,61 @@ exports.kakaoGetToken = onRequest(
   { cors: true },
   async (req, res) => {
     try {
-      if (req.method === 'OPTIONS') {
-        res.set('Access-Control-Allow-Origin', '*');
-        res.set('Access-Control-Allow-Methods', 'POST');
-        res.set('Access-Control-Allow-Headers', 'Content-Type');
-        return res.status(204).send('');
-      }
-      res.set('Access-Control-Allow-Origin', '*');
       const { code, redirect_uri } = req.body;
 
       if (!code || !redirect_uri) {
         return res.status(400).send({ error: 'Missing code or redirect_uri' });
       }
 
+      const clientId = 'b5f8383395eb1541fd44d134a1ef6d6b';
+      const clientSecret = ''; // Kakao Client Secret (Optional, if enabled in console)
+      const redirectUri = redirect_uri;
+
+      console.log('[KAKAO BACKEND] client_id length=', clientId?.length);
+      console.log('[KAKAO BACKEND] client_secret exists=', !!clientSecret);
+      console.log('[KAKAO BACKEND] redirect_uri=', redirectUri);
+
+      // 1. Get Access Token from Kakao
+      // Verification: Request sent to https://kauth.kakao.com/oauth/token
+      // Body includes: grant_type, client_id, client_secret (if exists), redirect_uri, code
       const params = new URLSearchParams();
       params.append('grant_type', 'authorization_code');
-      params.append('client_id', 'b5f8383395eb1541fd44d134a1ef6d6b');
-      params.append('redirect_uri', redirect_uri);
+      params.append('client_id', clientId);
+      if (clientSecret) {
+        params.append('client_secret', clientSecret);
+      }
+      params.append('redirect_uri', redirectUri);
       params.append('code', code);
 
-      const response = await axios.post('https://kauth.kakao.com/oauth/token', params, {
+      console.log('[KAKAO BACKEND] Token request body:', params.toString());
+
+      const tokenResponse = await axios.post('https://kauth.kakao.com/oauth/token', params, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
         },
       });
 
-      return res.send(response.data);
+      const accessToken = tokenResponse.data.access_token;
+
+      // 2. Get User Info from Kakao
+      // Doing this server-side completely avoids client-side CORB/CORS issues
+      const userResponse = await axios.get('https://kapi.kakao.com/v2/user/me', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+        },
+      });
+
+      // Return both for the client to use
+      return res.status(200).send({
+        token: tokenResponse.data,
+        user: userResponse.data
+      });
     } catch (error) {
-      console.error('Kakao Token Error:', error.response ? error.response.data : error.message);
-      return res.status(error.response ? error.response.status : 500).send(
-        error.response ? error.response.data : { error: error.message }
-      );
+      console.error('Kakao API Error:', error.response ? error.response.data : error.message);
+      const statusCode = error.response ? error.response.status : 500;
+      const errorData = error.response ? error.response.data : { error: error.message };
+      return res.status(statusCode).send(errorData);
     }
   }
 );

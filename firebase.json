@@ -8,28 +8,23 @@
           "fileOutput": "android/app/google-services.json"
         }
       },
-      "dart": {
-        "lib/firebase_options.dart": {
+      "ios": {
+        "default": {
           "projectId": "nproject-302c9",
-          "configurations": {
-            "android": "1:400795002326:android:701bbf9a5cfb041c8eb077",
-            "ios": "1:400795002326:ios:41776c79599baede8eb077",
-            "macos": "1:400795002326:ios:41776c79599baede8eb077",
-            "web": "1:400795002326:web:bbfdb1c8850384148eb077",
-            "windows": "1:400795002326:web:a8727c04d07a2d6b8eb077"
-          }
+          "appId": "1:400795002326:ios:02cc7203b578c7738eb077",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "nproject-302c9",
+          "appId": "1:400795002326:ios:02cc7203b578c7738eb077",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
         }
       }
     }
-  },
-  "firestore": {
-    "database": "(default)",
-    "location": "asia-southeast1",
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
-  "storage": {
-    "rules": "storage.rules"
   },
   "hosting": {
     "public": "build/web",
@@ -38,7 +33,22 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * 'unsafe-inline' 'unsafe-eval'; img-src * data: blob: 'unsafe-inline'; frame-src *;"
+          }
+        ]
+      }
+    ],
     "rewrites": [
+      {
+        "source": "/api/kakao-token",
+        "function": "kakaoGetToken"
+      },
       {
         "source": "/kakao-callback",
         "destination": "/index.html"
@@ -49,11 +59,17 @@
       }
     ]
   },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
   "functions": [
     {
       "source": "functions",
       "codebase": "default",
-      "disallowLegacyRuntimeConfig": true,
       "ignore": [
         "node_modules",
         ".git",

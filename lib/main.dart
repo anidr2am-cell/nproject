@@ -18,6 +18,7 @@ import 'dart:js' as js;
 import 'dart:js_util' as js_util;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:kakao_flutter_sdk_common/kakao_flutter_sdk_common.dart';
 
 const _firebaseRequestTimeout = Duration(seconds: 15);
 bool _firebaseReady = false;
@@ -25,6 +26,22 @@ String? _firebaseInitMessage;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // 글로벌 에러 핸들러 추가
+  FlutterError.onError = (details) {
+    debugPrint('[FLUTTER ERROR]');
+    debugPrint(details.exceptionAsString());
+    debugPrint(details.stack.toString());
+  };
+
+  // 비동기 에러 핸들러 추가
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('[UNCAUGHT ERROR] $error');
+    debugPrint(stack.toString());
+    return true;
+  };
+
+  KakaoSdk.init(javaScriptAppKey: '74b31eda4b54ec54e6867ed514d9ac3b');
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -61,7 +78,10 @@ String? _firebaseUnavailableMessage() {
 
 Stream<User?> _authStateStream() {
   if (_firebaseUnavailableMessage() != null) return Stream<User?>.value(null);
-  return FirebaseAuth.instance.authStateChanges();
+  return FirebaseAuth.instance.authStateChanges().map((user) {
+    debugPrint('[KAKAO] authStateChanges user=${user?.uid}');
+    return user;
+  });
 }
 
 User? _currentUserOrNull() {
@@ -219,15 +239,19 @@ class _AppShellState extends State<AppShell> {
     final code = uri.queryParameters['code'];
     if (code == null || !uri.path.contains('kakao-callback')) return;
 
+    debugPrint('[KAKAO] login start (callback)');
+    debugPrint('[KAKAO] authorization code received: $code');
+
     // 로딩 표시를 위해 임시로 MyPage 탭으로 이동하거나 스낵바 표시 가능
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('카카오 로그인 중...'), duration: Duration(seconds: 2)),
     );
 
     try {
-      // 1. 액세스 토큰 발급 (Cloud Function 호출로 CORS 회피)
-      final tokenResponse = await http.post(
-        Uri.parse('https://kakaogettoken-r27gzvs4uq-uc.a.run.app'),
+      // 1. 액세스 토큰 및 사용자 정보 통합 조회 (Firebase Hosting Rewrite를 통한 Same-Origin 호출로 CORS/CORB 해결)
+      debugPrint('[KAKAO] initiating token & user info request to backend');
+      final apiResponse = await http.post(
+        Uri.parse('https://82saja.com/api/kakao-token'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'redirect_uri': 'https://82saja.com/kakao-callback',
@@ -235,25 +259,23 @@ class _AppShellState extends State<AppShell> {
         }),
       ).timeout(_firebaseRequestTimeout);
 
-      final tokenData = json.decode(tokenResponse.body);
-      final accessToken = tokenData['access_token'];
-      if (accessToken == null) {
-        throw Exception('Access token not found: ${tokenResponse.body}');
+      if (apiResponse.statusCode != 200) {
+        throw Exception('API 호출 실패: ${apiResponse.body}');
       }
 
-      // 2. 사용자 정보 조회
-      final userResponse = await http.get(
-        Uri.parse('https://kapi.kakao.com/v2/user/me'),
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
-        },
-      ).timeout(_firebaseRequestTimeout);
+      final data = json.decode(apiResponse.body);
+      final accessToken = data['token']?['access_token'];
+      final userData = data['user'];
 
-      final userData = json.decode(userResponse.body);
+      if (accessToken == null || userData == null) {
+        throw Exception('토큰 또는 사용자 정보를 가져오지 못했습니다.');
+      }
+
+      debugPrint('[KAKAO] token & user info received from backend');
+
       final kakaoId = userData['id']?.toString();
       if (kakaoId == null) {
-        throw Exception('Kakao ID not found: ${userResponse.body}');
+        throw Exception('Kakao ID not found');
       }
 
       String nickname = '카카오사용자';
@@ -265,28 +287,50 @@ class _AppShellState extends State<AppShell> {
       final password = 'kakao_${kakaoId}_wonbaht';
 
       // 3. Firebase 로그인
+      debugPrint('[KAKAO] email=$email');
+      debugPrint('[KAKAO] nickname=$nickname');
+      debugPrint('[KAKAO] password.length=${password.length}');
+      debugPrint('[KAKAO] starting firebase login');
+      
       UserCredential userCredential;
       try {
         userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: password,
         ).timeout(_firebaseRequestTimeout);
+        debugPrint('[FIREBASE] login success uid=${userCredential.user?.uid}');
       } on FirebaseAuthException catch (e) {
-        if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
-          userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-            email: email,
-            password: password,
-          ).timeout(_firebaseRequestTimeout);
-          await userCredential.user?.updateDisplayName(nickname);
-          
-          // Firestore 유저 정보 초기화 (선택 사항)
-          await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-            'uid': userCredential.user!.uid,
-            'nickname': nickname,
-            'email': email,
-            'termsAccepted': true, // 카카오 로그인은 일단 동의된 것으로 처리하거나 추후 보완
-            'createdAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+        debugPrint('[FIREBASE] signIn error');
+        debugPrint('[FIREBASE] code=${e.code}');
+        debugPrint('[FIREBASE] message=${e.message}');
+        
+        // Firebase Auth Web SDK에서 'invalid-credential' 또는 'user-not-found'는 계정이 없음을 의미할 수 있음
+        if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'invalid-login-credentials') {
+          debugPrint('[FIREBASE] createUser start');
+          try {
+            userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+              email: email,
+              password: password,
+            ).timeout(_firebaseRequestTimeout);
+            debugPrint('[FIREBASE] createUser success');
+            
+            await userCredential.user?.updateDisplayName(nickname);
+            debugPrint('[FIREBASE] login success uid=${userCredential.user?.uid}');
+            
+            // Firestore 유저 정보 초기화 (선택 사항)
+            await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+              'uid': userCredential.user!.uid,
+              'nickname': nickname,
+              'email': email,
+              'termsAccepted': true,
+              'createdAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+          } on FirebaseAuthException catch (ce) {
+            debugPrint('[FIREBASE] createUser error');
+            debugPrint('[FIREBASE] code=${ce.code}');
+            debugPrint('[FIREBASE] message=${ce.message}');
+            rethrow;
+          }
         } else {
           rethrow;
         }
@@ -299,6 +343,7 @@ class _AppShellState extends State<AppShell> {
       html.window.history.replaceState(null, '', '/');
       setState(() => _index = 0);
     } catch (e) {
+      debugPrint('[KAKAO] exception in callback: $e');
       debugPrint('[AppShell] Kakao Callback Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('카카오 로그인 처리 중 오류가 발생했습니다.')));
