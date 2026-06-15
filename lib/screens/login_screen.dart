@@ -1,4 +1,6 @@
 ﻿import 'dart:async';
+import 'dart:js' as js;
+import 'dart:js_util' as js_util;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -26,6 +28,86 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isSubmitting = false;
   bool _isGoogleSubmitting = false;
+  bool _isKakaoSubmitting = false;
+
+  Future<void> _signInWithKakao() async {
+    final unavailableMessage = _firebaseUnavailableMessage();
+    if (unavailableMessage != null) {
+      _showMessage(unavailableMessage);
+      return;
+    }
+
+    setState(() => _isKakaoSubmitting = true);
+    try {
+      final kakao = js_util.getProperty(js_util.globalThis, 'Kakao');
+      final auth = js_util.getProperty(kakao, 'Auth');
+
+      final completer = Completer<String>();
+      js_util.callMethod(auth, 'login', [
+        js_util.jsify({
+          'success': js.allowInterop((authObj) {
+            final accessToken = js_util.getProperty(authObj, 'access_token');
+            completer.complete(accessToken);
+          }),
+          'fail': js.allowInterop((err) {
+            completer.completeError(err);
+          }),
+        })
+      ]);
+
+      final accessToken = await completer.future;
+      final api = js_util.getProperty(kakao, 'API');
+      final userCompleter = Completer<Map<String, dynamic>>();
+
+      js_util.callMethod(api, 'request', [
+        js_util.jsify({
+          'url': '/v2/user/me',
+          'success': js.allowInterop((response) {
+            final id = js_util.getProperty(response, 'id');
+            final properties = js_util.getProperty(response, 'properties');
+            final nickname = js_util.getProperty(properties, 'nickname');
+            userCompleter.complete({'id': id, 'nickname': nickname});
+          }),
+          'fail': js.allowInterop((err) {
+            userCompleter.completeError(err);
+          }),
+        })
+      ]);
+
+      final userInfo = await userCompleter.future;
+      final kakaoId = userInfo['id'].toString();
+      final nickname = userInfo['nickname'] as String;
+      final email = '$kakaoId@kakao.com';
+      final password = 'kakao_$kakaoId';
+
+      UserCredential userCredential;
+      try {
+        userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        ).timeout(_firebaseRequestTimeout);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+          userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+            email: email,
+            password: password,
+          ).timeout(_firebaseRequestTimeout);
+          await userCredential.user?.updateDisplayName(nickname);
+        } else {
+          rethrow;
+        }
+      }
+
+      if (!mounted) return;
+      _showMessage('카카오 로그인되었습니다.');
+      Navigator.of(context).pop();
+    } catch (e) {
+      debugPrint('[LoginScreen] Kakao Login Error: $e');
+      _showMessage('카카오 로그인에 실패했습니다.');
+    } finally {
+      if (mounted) setState(() => _isKakaoSubmitting = false);
+    }
+  }
 
   @override
   void initState() {
@@ -263,6 +345,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       height: 20,
                     ),
               label: const Text('Google濡?怨꾩냽?섍린', style: TextStyle(color: _ink)),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _isKakaoSubmitting ? null : _signInWithKakao,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFEE500),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                side: BorderSide.none,
+              ),
+              icon: _isKakaoSubmitting
+                  ? const SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                    )
+                  : const Icon(Icons.chat, size: 20),
+              label: const Text('카카오로 시작하기', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),

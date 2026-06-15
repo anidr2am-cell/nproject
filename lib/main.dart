@@ -14,6 +14,10 @@ import 'firebase_options.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'dart:js' as js;
+import 'dart:js_util' as js_util;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 const _firebaseRequestTimeout = Duration(seconds: 15);
 bool _firebaseReady = false;
@@ -204,8 +208,103 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _openInitialDeepLink();
+      _handleKakaoCallback();
       _initFcm();
     });
+  }
+
+  Future<void> _handleKakaoCallback() async {
+    if (!kIsWeb) return;
+    final uri = Uri.parse(html.window.location.href);
+    final code = uri.queryParameters['code'];
+    if (code == null || !uri.path.contains('kakao-callback')) return;
+
+    // 로딩 표시를 위해 임시로 MyPage 탭으로 이동하거나 스낵바 표시 가능
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('카카오 로그인 중...'), duration: Duration(seconds: 2)),
+    );
+
+    try {
+      // 1. 액세스 토큰 발급 (Cloud Function 호출로 CORS 회피)
+      final tokenResponse = await http.post(
+        Uri.parse('https://kakaogettoken-r27gzvs4uq-uc.a.run.app'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'redirect_uri': 'https://82saja.com/kakao-callback',
+          'code': code,
+        }),
+      ).timeout(_firebaseRequestTimeout);
+
+      final tokenData = json.decode(tokenResponse.body);
+      final accessToken = tokenData['access_token'];
+      if (accessToken == null) {
+        throw Exception('Access token not found: ${tokenResponse.body}');
+      }
+
+      // 2. 사용자 정보 조회
+      final userResponse = await http.get(
+        Uri.parse('https://kapi.kakao.com/v2/user/me'),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+        },
+      ).timeout(_firebaseRequestTimeout);
+
+      final userData = json.decode(userResponse.body);
+      final kakaoId = userData['id']?.toString();
+      if (kakaoId == null) {
+        throw Exception('Kakao ID not found: ${userResponse.body}');
+      }
+
+      String nickname = '카카오사용자';
+      if (userData['properties'] != null && userData['properties']['nickname'] != null) {
+        nickname = userData['properties']['nickname'].toString();
+      }
+      
+      final email = '$kakaoId@kakao.wonbaht.com';
+      final password = 'kakao_${kakaoId}_wonbaht';
+
+      // 3. Firebase 로그인
+      UserCredential userCredential;
+      try {
+        userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        ).timeout(_firebaseRequestTimeout);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+          userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+            email: email,
+            password: password,
+          ).timeout(_firebaseRequestTimeout);
+          await userCredential.user?.updateDisplayName(nickname);
+          
+          // Firestore 유저 정보 초기화 (선택 사항)
+          await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+            'uid': userCredential.user!.uid,
+            'nickname': nickname,
+            'email': email,
+            'termsAccepted': true, // 카카오 로그인은 일단 동의된 것으로 처리하거나 추후 보완
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        } else {
+          rethrow;
+        }
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('카카오 계정으로 로그인되었습니다.')));
+      
+      // 4. URL 클린업 및 홈으로 이동
+      html.window.history.replaceState(null, '', '/');
+      setState(() => _index = 0);
+    } catch (e) {
+      debugPrint('[AppShell] Kakao Callback Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('카카오 로그인 처리 중 오류가 발생했습니다.')));
+        html.window.history.replaceState(null, '', '/');
+      }
+    }
   }
 
   Future<void> _promptLoginThenOpen() async {
@@ -3968,6 +4067,30 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isSubmitting = false;
 
   bool _isGoogleSubmitting = false;
+  bool _isKakaoSubmitting = false;
+
+  Future<void> _signInWithKakao() async {
+    final unavailableMessage = _firebaseUnavailableMessage();
+    if (unavailableMessage != null) {
+      _showMessage(unavailableMessage);
+      return;
+    }
+
+    setState(() => _isKakaoSubmitting = true);
+    try {
+      if (kIsWeb) {
+        js.context.callMethod('eval', ['''
+          Kakao.Auth.authorize({
+            redirectUri: 'https://82saja.com/kakao-callback'
+          });
+        ''']);
+      }
+    } catch (e) {
+      debugPrint('[LoginScreen] Kakao Login Error: $e');
+      _showMessage('카카오 로그인 호출에 실패했습니다.');
+      if (mounted) setState(() => _isKakaoSubmitting = false);
+    }
+  }
 
 Future<void> _signInWithGoogle() async {
   final unavailableMessage = _firebaseUnavailableMessage();
@@ -4179,6 +4302,25 @@ OutlinedButton.icon(
           width: 20, height: 20,
         ),
   label: const Text('Google로 계속하기', style: TextStyle(color: _ink)),
+),
+const SizedBox(height: 8),
+ElevatedButton.icon(
+  onPressed: _isKakaoSubmitting ? null : _signInWithKakao,
+  style: ElevatedButton.styleFrom(
+    backgroundColor: const Color(0xFFFEE500),
+    foregroundColor: Colors.black,
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    elevation: 0,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+    side: BorderSide.none,
+  ),
+  icon: _isKakaoSubmitting
+      ? const SizedBox(
+          width: 18, height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+        )
+      : const Icon(Icons.chat, size: 20),
+  label: const Text('카카오로 시작하기', style: TextStyle(fontWeight: FontWeight.bold)),
 ),
           ],
         ),
