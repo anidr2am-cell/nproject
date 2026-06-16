@@ -29,16 +29,69 @@ Future<void> main() async {
   
   // 글로벌 에러 핸들러 추가
   FlutterError.onError = (details) {
+    final exception = details.exceptionAsString();
+    final stack = details.stack.toString();
+    
+    // 기본 디버그 출력
     debugPrint('[FLUTTER ERROR]');
-    debugPrint(details.exceptionAsString());
-    debugPrint(details.stack.toString());
+    debugPrint(exception);
+    debugPrint(stack);
+
+    // 웹 릴리즈 모드에서도 확실히 보이도록 window.console 사용
+    if (kIsWeb) {
+      js.context['console'].callMethod('error', ['[FLUTTER ERROR]', exception]);
+      js.context['console'].callMethod('error', [stack]);
+    }
   };
 
   // 비동기 에러 핸들러 추가
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('[UNCAUGHT ERROR] $error');
-    debugPrint(stack.toString());
+    final errorStr = error.toString();
+    final stackStr = stack.toString();
+
+    debugPrint('[UNCAUGHT ERROR] $errorStr');
+    debugPrint(stackStr);
+
+    if (kIsWeb) {
+      js.context['console'].callMethod('error', ['[UNCAUGHT ERROR]', errorStr]);
+      js.context['console'].callMethod('error', [stackStr]);
+    }
     return true;
+  };
+
+  // UI 렌더링 에러 핸들러
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    final exception = details.exceptionAsString();
+    if (kIsWeb) {
+      js.context['console'].callMethod('error', ['[UI ERROR]', exception]);
+    }
+    return Material(
+      child: Container(
+        color: Colors.white,
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                '화면을 표시하는 중 오류가 발생했습니다.',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                exception,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+                textAlign: TextAlign.center,
+                maxLines: 5,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   };
 
   KakaoSdk.init(javaScriptAppKey: '74b31eda4b54ec54e6867ed514d9ac3b');
@@ -294,46 +347,31 @@ class _AppShellState extends State<AppShell> {
       
       UserCredential userCredential;
       try {
+        // 1. 먼저 로그인 시도
         userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: password,
         ).timeout(_firebaseRequestTimeout);
         debugPrint('[FIREBASE] login success uid=${userCredential.user?.uid}');
-      } on FirebaseAuthException catch (e) {
-        debugPrint('[FIREBASE] signIn error');
-        debugPrint('[FIREBASE] code=${e.code}');
-        debugPrint('[FIREBASE] message=${e.message}');
+      } catch (e) {
+        // 2. 실패하면 회원가입 후 로그인
+        debugPrint('[FIREBASE] signIn failed, trying to create user: $e');
+        userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        ).timeout(_firebaseRequestTimeout);
         
-        // Firebase Auth Web SDK에서 'invalid-credential' 또는 'user-not-found'는 계정이 없음을 의미할 수 있음
-        if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'invalid-login-credentials') {
-          debugPrint('[FIREBASE] createUser start');
-          try {
-            userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-              email: email,
-              password: password,
-            ).timeout(_firebaseRequestTimeout);
-            debugPrint('[FIREBASE] createUser success');
-            
-            await userCredential.user?.updateDisplayName(nickname);
-            debugPrint('[FIREBASE] login success uid=${userCredential.user?.uid}');
-            
-            // Firestore 유저 정보 초기화 (선택 사항)
-            await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-              'uid': userCredential.user!.uid,
-              'nickname': nickname,
-              'email': email,
-              'termsAccepted': true,
-              'createdAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-          } on FirebaseAuthException catch (ce) {
-            debugPrint('[FIREBASE] createUser error');
-            debugPrint('[FIREBASE] code=${ce.code}');
-            debugPrint('[FIREBASE] message=${ce.message}');
-            rethrow;
-          }
-        } else {
-          rethrow;
-        }
+        await userCredential.user?.updateDisplayName(nickname);
+        
+        // Firestore 유저 정보 초기화
+        await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+          'uid': userCredential.user!.uid,
+          'nickname': nickname,
+          'email': email,
+          'termsAccepted': true,
+          'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        debugPrint('[FIREBASE] createUser success & login');
       }
 
       if (!mounted) return;
