@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
+import 'real_estate_detail_screen.dart';
 import 'real_estate_write_screen.dart';
 
 class RealEstateScreen extends StatefulWidget {
@@ -100,9 +101,11 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
                     color: Color(0xFFEDEDED),
                   ),
                   itemBuilder: (context, index) {
-                    final data = docs[index].data();
+                    final doc = docs[index];
+                    final data = doc.data();
                     return _RealEstateTile(
                       data: data,
+                      docId: doc.id,
                       timeAgo: _getTimeAgo(data['createdAt']),
                     );
                   },
@@ -128,67 +131,86 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
 
   Widget _buildFilterBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFEDEDED))),
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFF0F0F0), width: 1)),
       ),
       child: Column(
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+          // 1. 거래유형 필터 (전체/매매/월세) - 균등 너비
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
-              children: _tradeTypes.map((type) => Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(type),
-                  selected: _selectedTradeType == type,
-                  onSelected: (_) => setState(() => _selectedTradeType = type),
-                  showCheckmark: false,
-                  labelStyle: TextStyle(
-                    color: _selectedTradeType == type ? Colors.white : ink,
-                    fontWeight: _selectedTradeType == type ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 13,
-                  ),
-                  selectedColor: brandOrange,
-                  backgroundColor: surface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: _selectedTradeType == type ? brandOrange : const Color(0xFFE0E0E0),
+              children: _tradeTypes.map((type) {
+                final isSelected = _selectedTradeType == type;
+                final isFirst = type == _tradeTypes.first;
+                final isLast = type == _tradeTypes.last;
+
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      right: isLast ? 0 : 6,
+                    ),
+                    child: InkWell(
+                      onTap: () => setState(() => _selectedTradeType = type),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF333333) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
+                          ),
+                        ),
+                        child: Text(
+                          type,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : const Color(0xFF888888),
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              )).toList(),
+                );
+              }).toList(),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          // 2. 부동산종류 필터 (가로 스크롤 캡슐)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
-              children: _propertyTypes.map((type) => Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(type),
-                  selected: _selectedPropertyType == type,
-                  onSelected: (_) => setState(() => _selectedPropertyType = type),
-                  showCheckmark: false,
-                  labelStyle: TextStyle(
-                    color: _selectedPropertyType == type ? Colors.white : ink,
-                    fontWeight: _selectedPropertyType == type ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 13,
-                  ),
-                  selectedColor: brandOrange,
-                  backgroundColor: surface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: _selectedPropertyType == type ? brandOrange : const Color(0xFFE0E0E0),
+              children: _propertyTypes.map((type) {
+                final isSelected = _selectedPropertyType == type;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: InkWell(
+                    onTap: () => setState(() => _selectedPropertyType = type),
+                    borderRadius: BorderRadius.circular(999),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFFF5F5F5) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        type,
+                        style: TextStyle(
+                          color: isSelected ? const Color(0xFF333333) : const Color(0xFF999999),
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              )).toList(),
+                );
+              }).toList(),
             ),
           ),
         ],
@@ -199,9 +221,14 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
 
 class _RealEstateTile extends StatelessWidget {
   final Map<String, dynamic> data;
+  final String docId;
   final String timeAgo;
 
-  const _RealEstateTile({required this.data, required this.timeAgo});
+  const _RealEstateTile({
+    required this.data,
+    required this.docId,
+    required this.timeAgo,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -210,7 +237,11 @@ class _RealEstateTile extends StatelessWidget {
 
     return InkWell(
       onTap: () {
-        // 상세 화면은 아직 구현하지 않음
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => RealEstateDetailScreen(data: data, docId: docId),
+          ),
+        );
       },
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
