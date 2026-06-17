@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:js' as js;
 import 'dart:js_util' as js_util;
 import 'package:flutter/material.dart';
@@ -44,9 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (kIsWeb) {
         print('[KAKAO] initiating redirect login (web)');
         try {
-          await kakao_sdk.UserApi.instance.loginWithKakaoAccount(
-            redirectUri: 'https://82saja.com'
-          );
+          await kakao_sdk.UserApi.instance.loginWithKakaoAccount();
           print('[KAKAO] authorization request sent');
           return; // 리다이렉트 시 페이지가 이동하므로 이후 코드는 실행되지 않음
         } catch (error) {
@@ -117,7 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (kIsWeb) {
       FirebaseAuth.instance.getRedirectResult().then((result) {
         if (result.user != null && mounted) {
-          _showMessage('援ш? 濡쒓렇?몃릺?덉뒿?덈떎.');
+          _showMessage('구글 로그인되었습니다.');
           if (Navigator.of(context).canPop()) {
             Navigator.of(context).pop();
           }
@@ -153,13 +151,13 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       await FirebaseAuth.instance.signInWithCredential(credential);
       if (!mounted) return;
-      _showMessage('援ш? 濡쒓렇?몃릺?덉뒿?덈떎.');
+      _showMessage('구글 로그인되었습니다.');
       Navigator.of(context).pop();
     } on FirebaseAuthException catch (e) {
       _showMessage(_firebaseMessage(e));
     } catch (e) {
       debugPrint('[LoginScreen] Google Sign-In Error: $e');
-      _showMessage('援ш? 濡쒓렇?몄뿉 ?ㅽ뙣?덉뒿?덈떎.');
+      _showMessage('구글 로그인에 실패했습니다.');
     } finally {
       if (mounted) setState(() => _isGoogleSubmitting = false);
     }
@@ -173,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String? _required(String? value) {
-    if (value == null || value.trim().isEmpty) return '?꾩닔 ?낅젰 ??ぉ?낅땲??';
+    if (value == null || value.trim().isEmpty) return '필수 입력 항목입니다.';
     return null;
   }
 
@@ -186,26 +184,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String? _firebaseUnavailableMessage() {
     if (Firebase.apps.isNotEmpty) return null;
-    return 'Firebase媛 ?꾩쭅 珥덇린?붾릺吏 ?딆븯?듬땲?? ?좎떆 ???ㅼ떆 ?쒕룄?댁＜?몄슂.';
+    return 'Firebase가 아직 초기화되지 않았습니다. 잠시 후 다시 시도해주세요.';
   }
 
   String _firebaseMessage(FirebaseException error) {
     return switch (error.code) {
-      'invalid-email' => '?대찓???뺤떇???щ컮瑜댁? ?딆뒿?덈떎.',
-      'email-already-in-use' => '?대? 媛?낅맂 ?대찓?쇱엯?덈떎.',
-      'weak-password' => '鍮꾨?踰덊샇媛 ?덈Т ?쏀빀?덈떎. 6?먮━ ?댁긽?쇰줈 ?낅젰?댁＜?몄슂.',
-      'user-not-found' => '媛?낅릺吏 ?딆? ?대찓?쇱엯?덈떎.',
-      'wrong-password' => '鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.',
-      'invalid-credential' => '?대찓???먮뒗 鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.',
-      'operation-not-allowed' => 'Firebase 肄섏넄?먯꽌 ?대찓??鍮꾨?踰덊샇 濡쒓렇?몄쓣 ?쒖꽦?뷀빐二쇱꽭??',
+      'invalid-email' => '이메일 형식이 올바르지 않습니다.',
+      'email-already-in-use' => '이미 가입된 이메일입니다.',
+      'weak-password' => '비밀번호가 너무 약합니다. 6자리 이상으로 입력해주세요.',
+      'user-not-found' => '가입되지 않은 이메일입니다.',
+      'wrong-password' => '비밀번호가 올바르지 않습니다.',
+      'invalid-credential' => '이메일 또는 비밀번호가 올바르지 않습니다.',
+      'operation-not-allowed' => 'Firebase 콘솔에서 이메일/비밀번호 로그인을 활성화해주세요.',
       'configuration-not-found' =>
-        'Firebase Auth ?ㅼ젙??李얠쓣 ???놁뒿?덈떎. Firebase 肄섏넄 ?ㅼ젙???뺤씤?댁＜?몄슂.',
-      'permission-denied' => 'Firestore 沅뚰븳???놁뒿?덈떎. 蹂댁븞 洹쒖튃???뺤씤?댁＜?몄슂.',
-      'unavailable' => 'Firebase ?쒕쾭???곌껐?????놁뒿?덈떎. ?ㅽ듃?뚰겕 ?곹깭瑜??뺤씤?댁＜?몄슂.',
-      'failed-precondition' => 'Firebase ?ㅼ젙???꾨즺?섏? ?딆븯?듬땲?? 肄섏넄 ?ㅼ젙???뺤씤?댁＜?몄슂.',
-      'not-found' => 'Firebase ?꾨줈?앺듃 ?먮뒗 臾몄꽌瑜?李얠쓣 ???놁뒿?덈떎.',
-      'missing-user' => '?뚯썝 ?뺣낫瑜??앹꽦?섏? 紐삵뻽?듬땲??',
-      _ => error.message ?? 'Firebase ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎. (${error.code})',
+        'Firebase Auth 설정을 찾을 수 없습니다. Firebase 콘솔 설정을 확인해주세요.',
+      'permission-denied' => 'Firestore 권한이 없습니다. 보안 규칙을 확인해주세요.',
+      'unavailable' => 'Firebase 서버에 연결할 수 없습니다. 네트워크 상태를 확인해주세요.',
+      'failed-precondition' => 'Firebase 설정이 완료되지 않았습니다. 콘솔 설정을 확인해주세요.',
+      'not-found' => 'Firebase 프로젝트 또는 문서를 찾을 수 없습니다.',
+      'missing-user' => '회원 정보를 생성하지 못했습니다.',
+      _ => error.message ?? 'Firebase 오류가 발생했습니다. (${error.code})',
     };
   }
 
@@ -219,7 +217,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     if (!(_formKey.currentState?.validate() ?? false)) {
-      _showMessage('濡쒓렇???뺣낫瑜??낅젰?댁＜?몄슂.');
+      _showMessage('로그인 정보를 입력해주세요.');
       return;
     }
 
@@ -232,7 +230,7 @@ class _LoginScreenState extends State<LoginScreen> {
           )
           .timeout(_firebaseRequestTimeout);
       if (!mounted) return;
-      _showMessage('濡쒓렇?몃릺?덉뒿?덈떎.');
+      _showMessage('로그인되었습니다.');
       Navigator.of(context).pop();
     } on FirebaseAuthException catch (error, stackTrace) {
       debugPrint('[LoginScreen] FirebaseAuth error: ${error.code}');
@@ -241,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } on TimeoutException catch (error, stackTrace) {
       debugPrint('[LoginScreen] timeout: $error');
       debugPrintStack(stackTrace: stackTrace);
-      _showMessage('濡쒓렇???붿껌 ?쒓컙??珥덇낵?섏뿀?듬땲??');
+      _showMessage('로그인 요청 시간이 초과되었습니다.');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -250,7 +248,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('濡쒓렇??/ ?뚯썝媛??)),
+      appBar: AppBar(title: const Text('로그인 / 회원가입')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -271,14 +269,14 @@ class _LoginScreenState extends State<LoginScreen> {
               controller: _emailController,
               validator: _required,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(hintText: '?꾩씠??),
+              decoration: const InputDecoration(hintText: '이메일'),
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _passwordController,
               validator: _required,
               obscureText: true,
-              decoration: const InputDecoration(hintText: '?⑥뒪?뚮뱶'),
+              decoration: const InputDecoration(hintText: '비밀번호'),
             ),
             const SizedBox(height: 18),
             FilledButton(
@@ -300,7 +298,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : const Text('濡쒓렇??),
+                  : const Text('로그인'),
             ),
             const SizedBox(height: 8),
             Align(
@@ -313,7 +311,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   foregroundColor: _ink,
                   textStyle: const TextStyle(fontSize: 13),
                 ),
-                child: const Text('?꾩쭅 怨꾩젙???녿굹?? ?뚯썝媛??),
+                child: const Text('아직 계정이 없나요? 회원가입'),
               ),
             ),
             const SizedBox(height: 16),
@@ -322,7 +320,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Expanded(child: Divider()),
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('?먮뒗', style: TextStyle(color: _muted, fontSize: 13)),
+                  child: Text('또는', style: TextStyle(color: _muted, fontSize: 13)),
                 ),
                 Expanded(child: Divider()),
               ],
@@ -346,7 +344,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: 20,
                       height: 20,
                     ),
-              label: const Text('Google濡?怨꾩냽?섍린', style: TextStyle(color: _ink)),
+              label: const Text('Google로 계속하기', style: TextStyle(color: _ink)),
             ),
             const SizedBox(height: 8),
             ElevatedButton.icon(

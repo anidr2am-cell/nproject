@@ -13,6 +13,7 @@ import 'listing_detail_screen.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
 import 'login_screen.dart';
+import 'real_estate_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({required this.onWrite, super.key});
@@ -296,6 +297,17 @@ class QuickActionPanel extends StatelessWidget {
               subtitle: '소액 교환',
               isSelected: selectedType == ListingType.currency,
               onTap: () => onTypeSelected(ListingType.currency),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: QuickAction(
+              icon: Icons.home_work,
+              title: '부동산',
+              subtitle: '매매/월세',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const RealEstateScreen()),
+              ),
             ),
           ),
         ],

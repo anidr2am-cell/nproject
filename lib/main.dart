@@ -18,6 +18,7 @@ import 'dart:js' as js;
 import 'dart:js_util' as js_util;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'screens/real_estate_screen.dart';
 import 'package:kakao_flutter_sdk_common/kakao_flutter_sdk_common.dart';
 
 const _firebaseRequestTimeout = Duration(seconds: 15);
@@ -1160,6 +1161,17 @@ class _QuickActionPanel extends StatelessWidget {
               subtitle: '소액 교환',
               isSelected: selectedType == ListingType.currency,
               onTap: () => onTypeSelected(ListingType.currency),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.home_work,
+              title: '부동산',
+              subtitle: '매매/월세/상가',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const RealEstateScreen()),
+              ),
             ),
           ),
         ],
