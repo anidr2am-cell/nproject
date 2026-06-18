@@ -10,7 +10,10 @@ import '../services/firebase_service.dart';
 import 'login_screen.dart';
 
 class RealEstateWriteScreen extends StatefulWidget {
-  const RealEstateWriteScreen({super.key});
+  final String? docId;
+  final Map<String, dynamic>? initialData;
+
+  const RealEstateWriteScreen({this.docId, this.initialData, super.key});
 
   @override
   State<RealEstateWriteScreen> createState() => _RealEstateWriteScreenState();
@@ -36,7 +39,33 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
   final ImagePicker _picker = ImagePicker();
   final List<XFile> _pickedPhotos = [];
   final List<Uint8List> _photoBytesList = [];
+  final List<String> _existingPhotoUrls = [];
   final List<String> _propertyTypes = ['아파트', '콘도', '주택', '상가'];
+
+  bool get _isEditMode => widget.docId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditMode && widget.initialData != null) {
+      final data = widget.initialData!;
+      _dealType = data['dealType'] ?? '매매';
+      _propertyType = data['propertyType'] ?? '아파트';
+      _titleController.text = data['title'] ?? '';
+      _priceController.text = data['price'] ?? '';
+      _depositController.text = data['deposit'] ?? '';
+      _monthlyRentController.text = data['monthlyRent'] ?? '';
+      _areaController.text = data['area'] ?? '';
+      _roomsController.text = data['rooms'] ?? '';
+      _bathroomsController.text = data['bathrooms'] ?? '';
+      _floorController.text = data['floor'] ?? '';
+      _addressController.text = data['address'] ?? '';
+      _descriptionController.text = data['description'] ?? '';
+      if (data['photoUrls'] != null) {
+        _existingPhotoUrls.addAll(List<String>.from(data['photoUrls']));
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -54,7 +83,8 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
   }
 
   Future<void> _pickImages() async {
-    if (_pickedPhotos.length >= 10) {
+    final totalPhotos = _pickedPhotos.length + _existingPhotoUrls.length;
+    if (totalPhotos >= 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('사진은 최대 10장까지 등록 가능합니다.')),
       );
@@ -68,7 +98,7 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
       );
 
       if (picked.isNotEmpty) {
-        final remaining = 10 - _pickedPhotos.length;
+        final remaining = 10 - totalPhotos;
         final toAdd = picked.take(remaining).toList();
         
         final List<Uint8List> newBytes = [];
@@ -86,10 +116,16 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
     }
   }
 
-  void _removeImage(int index) {
+  void _removePickedImage(int index) {
     setState(() {
       _pickedPhotos.removeAt(index);
       _photoBytesList.removeAt(index);
+    });
+  }
+
+  void _removeExistingImage(int index) {
+    setState(() {
+      _existingPhotoUrls.removeAt(index);
     });
   }
 
@@ -123,7 +159,8 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final photoUrls = await _uploadPhotos(user.uid);
+      final newPhotoUrls = await _uploadPhotos(user.uid);
+      final finalPhotoUrls = [..._existingPhotoUrls, ...newPhotoUrls];
       final nickname = await fetchNicknameForUid(user.uid, fallback: user.displayName ?? '익명');
 
       final data = {
@@ -139,26 +176,31 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
         'floor': _floorController.text.trim(),
         'address': _addressController.text.trim(),
         'description': _descriptionController.text.trim(),
-        'photoUrls': photoUrls,
+        'photoUrls': finalPhotoUrls,
         'sellerUid': user.uid,
         'sellerNickname': nickname,
-        'createdAt': FieldValue.serverTimestamp(),
+        if (!_isEditMode) 'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
         'status': 'available',
       };
 
-      await FirebaseFirestore.instance.collection('realEstate').add(data);
+      if (_isEditMode) {
+        await FirebaseFirestore.instance.collection('realEstate').doc(widget.docId).update(data);
+      } else {
+        await FirebaseFirestore.instance.collection('realEstate').add(data);
+      }
 
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('매물이 등록되었습니다.')),
+          SnackBar(content: Text(_isEditMode ? '매물이 수정되었습니다.' : '매물이 등록되었습니다.')),
         );
       }
     } catch (e) {
       debugPrint('Error submitting real estate: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('등록 중 오류가 발생했습니다: $e')),
+          SnackBar(content: Text('처리 중 오류가 발생했습니다: $e')),
         );
       }
     } finally {
@@ -170,7 +212,7 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('매물 등록', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(_isEditMode ? '매물 수정' : '매물 등록', style: const TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           if (_isSubmitting)
             const Center(
@@ -182,7 +224,7 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
           else
             TextButton(
               onPressed: _submit,
-              child: const Text('등록', style: TextStyle(color: brandOrange, fontWeight: FontWeight.bold, fontSize: 16)),
+              child: Text(_isEditMode ? '수정' : '등록', style: const TextStyle(color: brandOrange, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
         ],
       ),
@@ -363,11 +405,44 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.camera_alt, color: muted),
-                      Text('${_pickedPhotos.length}/10', style: const TextStyle(color: muted, fontSize: 12)),
+                      Text('${_pickedPhotos.length + _existingPhotoUrls.length}/10', style: const TextStyle(color: muted, fontSize: 12)),
                     ],
                   ),
                 ),
               ),
+              // Existing photos
+              ...List.generate(_existingPhotoUrls.length, (index) {
+                return Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          image: DecorationImage(
+                            image: NetworkImage(_existingPhotoUrls[index]),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: GestureDetector(
+                          onTap: () => _removeExistingImage(index),
+                          child: Container(
+                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                            child: const Icon(Icons.close, color: Colors.white, size: 18),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              // Newly picked photos
               ...List.generate(_pickedPhotos.length, (index) {
                 final bytes = _photoBytesList[index];
                 return Padding(
@@ -389,7 +464,7 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
                         right: 0,
                         top: 0,
                         child: GestureDetector(
-                          onTap: () => _removeImage(index),
+                          onTap: () => _removePickedImage(index),
                           child: Container(
                             decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
                             child: const Icon(Icons.close, color: Colors.white, size: 18),

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
+import 'real_estate_detail_screen.dart';
 import 'real_estate_write_screen.dart';
 
 class RealEstateScreen extends StatefulWidget {
@@ -100,8 +101,10 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
                     color: Color(0xFFEDEDED),
                   ),
                   itemBuilder: (context, index) {
-                    final data = docs[index].data();
+                    final doc = docs[index];
+                    final data = doc.data();
                     return _RealEstateTile(
+                      docId: doc.id,
                       data: data,
                       timeAgo: _getTimeAgo(data['createdAt']),
                     );
@@ -198,10 +201,11 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
 }
 
 class _RealEstateTile extends StatelessWidget {
+  final String docId;
   final Map<String, dynamic> data;
   final String timeAgo;
 
-  const _RealEstateTile({required this.data, required this.timeAgo});
+  const _RealEstateTile({required this.docId, required this.data, required this.timeAgo});
 
   @override
   Widget build(BuildContext context) {
@@ -210,7 +214,11 @@ class _RealEstateTile extends StatelessWidget {
 
     return InkWell(
       onTap: () {
-        // 상세 화면은 아직 구현하지 않음
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => RealEstateDetailScreen(docId: docId, data: data),
+          ),
+        );
       },
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
@@ -288,3 +296,4 @@ class _RealEstateTile extends StatelessWidget {
     );
   }
 }
+
