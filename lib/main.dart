@@ -547,30 +547,138 @@ class _AppShellState extends State<AppShell> {
             const MyPageScreen(),
           ],
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          indicatorColor: _brandOrange.withValues(alpha: 0.12),
-          onDestinationSelected: (value) => _handleDestinationTap(value),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: '홈',
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Divider(height: 1, color: brandBorder),
+            Container(
+              color: brandBackground,
+              padding: EdgeInsets.only(
+                bottom: html.window.navigator.userAgent.contains('iPhone') ||
+                        html.window.navigator.userAgent.contains('iPad')
+                    ? 20
+                    : 8,
+                top: 8,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavTab(
+                    index: 0,
+                    icon: Icons.home_outlined,
+                    selectedIcon: Icons.home,
+                    label: '홈',
+                  ),
+                  _buildNavTab(
+                    index: 1,
+                    icon: Icons.grid_view_outlined,
+                    selectedIcon: Icons.grid_view,
+                    label: '카테고리',
+                  ),
+                  _buildNavTab(
+                    index: 2,
+                    icon: Icons.add,
+                    selectedIcon: Icons.add,
+                    label: '등록',
+                    isSpecial: true,
+                  ),
+                  _buildNavTab(
+                    index: 3,
+                    icon: Icons.person_outline,
+                    selectedIcon: Icons.person,
+                    label: '나의 정보',
+                  ),
+                ],
+              ),
             ),
-            NavigationDestination(
-              icon: Icon(Icons.grid_view_outlined),
-              selectedIcon: Icon(Icons.grid_view),
-              label: '카테고리',
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavTab({
+    required int index,
+    required IconData icon,
+    required IconData selectedIcon,
+    required String label,
+    bool isSpecial = false,
+  }) {
+    final isSelected = _index == index;
+    final color = isSelected ? brandPrimary : const Color(0xFFB5B3AC);
+
+    if (isSpecial) {
+      return GestureDetector(
+        onTap: () => _handleDestinationTap(index),
+        child: Transform.translate(
+          offset: const Offset(0, -6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  color: brandSecondary,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x33B08D57),
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.add, color: Colors.white, size: 28),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () => _handleDestinationTap(index),
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 60,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isSelected)
+              Container(
+                width: 4,
+                height: 4,
+                decoration: const BoxDecoration(
+                  color: brandPrimary,
+                  shape: BoxShape.circle,
+                ),
+              )
+            else
+              const SizedBox(height: 4),
+            const SizedBox(height: 2),
+            Icon(
+              isSelected ? selectedIcon : icon,
+              color: color,
+              size: 22,
             ),
-            NavigationDestination(
-              icon: Icon(Icons.add_circle_outline),
-              selectedIcon: Icon(Icons.add_circle),
-              label: '등록',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: '나의 정보',
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
             ),
           ],
         ),
