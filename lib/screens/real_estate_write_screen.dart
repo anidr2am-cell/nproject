@@ -224,7 +224,14 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
           else
             TextButton(
               onPressed: _submit,
-              child: Text(_isEditMode ? '수정' : '등록', style: const TextStyle(color: brandOrange, fontWeight: FontWeight.bold, fontSize: 16)),
+              child: Text(
+                _isEditMode ? '수정' : '등록',
+                style: const TextStyle(
+                  color: brandPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              ),
             ),
         ],
       ),
@@ -497,19 +504,39 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
       onSelected: (val) {
         if (val) setState(() => _dealType = type);
       },
-      selectedColor: brandOrange,
-      labelStyle: TextStyle(color: isSelected ? Colors.white : ink, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+      selectedColor: brandPrimary,
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.white : brandInk,
+        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+      ),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: isSelected ? brandPrimary : brandBorder),
+      ),
+      showCheckmark: false,
     );
   }
 
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+      hintStyle: const TextStyle(color: brandMuted, fontSize: 14),
+      filled: true,
+      fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: brandOrange)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: brandBorder),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: brandBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: brandPrimary, width: 1.4),
+      ),
     );
   }
 }

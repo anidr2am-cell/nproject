@@ -212,7 +212,14 @@ class _PostListingScreenState extends State<PostListingScreen> {
           else
             TextButton(
               onPressed: _submit,
-              child: Text(widget.isEditing ? '수정' : '완료', style: const TextStyle(color: brandOrange, fontWeight: FontWeight.bold, fontSize: 16)),
+              child: Text(
+                widget.isEditing ? '수정' : '완료',
+                style: const TextStyle(
+                  color: brandPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              ),
             ),
         ],
       ),
@@ -371,11 +378,22 @@ class _PostListingScreenState extends State<PostListingScreen> {
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+      hintStyle: const TextStyle(color: brandMuted, fontSize: 14),
+      filled: true,
+      fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: brandOrange)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: brandBorder),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: brandBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: brandPrimary, width: 1.4),
+      ),
     );
   }
 }

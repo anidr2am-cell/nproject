@@ -2737,10 +2737,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           SafeArea(
             top: false,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               decoration: const BoxDecoration(
                 color: Colors.white,
-                border: Border(top: BorderSide(color: Color(0xFFEDEDED))),
+                border: Border(top: BorderSide(color: brandBorder)),
               ),
               child: Row(
                 children: [
@@ -2751,15 +2751,34 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       maxLines: 4,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _sendMessage(),
-                      decoration: const InputDecoration(hintText: '메시지를 입력하세요'),
+                      decoration: InputDecoration(
+                        hintText: '메시지를 입력하세요',
+                        hintStyle: const TextStyle(color: brandMuted, fontSize: 14),
+                        filled: true,
+                        fillColor: brandBackground,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: const BorderSide(color: brandPrimary, width: 1),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   IconButton.filled(
                     onPressed: _isSending ? null : _sendMessage,
                     style: IconButton.styleFrom(
-                      backgroundColor: _brandOrange,
+                      backgroundColor: brandPrimary,
                       foregroundColor: Colors.white,
+                      minimumSize: const Size(44, 44),
                     ),
                     icon: _isSending
                         ? const SizedBox(
@@ -2770,7 +2789,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.send),
+                        : const Icon(Icons.send, size: 20),
                   ),
                 ],
               ),
@@ -2796,7 +2815,7 @@ class _ChatListingHeader extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFEDEDED))),
+        border: Border(bottom: BorderSide(color: brandBorder)),
       ),
       child: Row(
         children: [
@@ -2804,19 +2823,20 @@ class _ChatListingHeader extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: listing.color,
-              borderRadius: BorderRadius.circular(6),
+              color: brandBackground,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: brandBorder),
             ),
             child: imageUrl == null
-                ? Icon(listing.icon, color: Colors.white)
+                ? Icon(listing.icon, color: brandMuted)
                 : ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(10),
                     child: Image.network(
                       imageUrl,
                       fit: BoxFit.cover,
                       webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
                       errorBuilder: (_, _, _) =>
-                          Icon(listing.icon, color: Colors.white),
+                          Icon(listing.icon, color: brandMuted),
                     ),
                   ),
           ),
@@ -2829,12 +2849,19 @@ class _ChatListingHeader extends StatelessWidget {
                   listing.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: brandPrimary,
+                  ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   listing.price,
-                  style: const TextStyle(color: _muted, fontSize: 13),
+                  style: const TextStyle(
+                    color: brandSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -2862,10 +2889,15 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final bubble = Container(
       constraints: const BoxConstraints(maxWidth: 280),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: isMine ? _brandOrange : _surface,
-        borderRadius: BorderRadius.circular(8),
+        color: isMine ? brandPrimary : const Color(0xFFF0EEE8),
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(16),
+          topRight: const Radius.circular(16),
+          bottomLeft: Radius.circular(isMine ? 16 : 0),
+          bottomRight: Radius.circular(isMine ? 0 : 16),
+        ),
       ),
       child: Column(
         crossAxisAlignment: isMine
@@ -2876,14 +2908,20 @@ class _MessageBubble extends StatelessWidget {
             Text(
               senderName,
               style: const TextStyle(
-                color: _muted,
+                color: brandMuted,
                 fontSize: 11,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 4),
           ],
-          Text(text, style: TextStyle(color: isMine ? Colors.white : _ink)),
+          Text(
+            text,
+            style: TextStyle(
+              color: isMine ? Colors.white : brandPrimary,
+              fontSize: 15,
+            ),
+          ),
         ],
       ),
     );
@@ -2898,13 +2936,13 @@ class _MessageBubble extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(right: 5, bottom: 2),
+                    padding: const EdgeInsets.only(right: 6, bottom: 2),
                     child: Text(
                       isReadByOther ? '읽음' : '1',
                       style: TextStyle(
-                        color: isReadByOther ? _muted : _brandOrange,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                        color: isReadByOther ? brandMuted : brandSecondary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -4094,24 +4132,25 @@ class _AuthScreenState extends State<AuthScreen> {
             const SizedBox(height: 32),
             const Text(
               '약관 동의',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: brandPrimary),
             ),
             const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFEDEDED)),
-                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: brandBorder),
+                borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
                 children: [
                   CheckboxListTile(
-                    title: const Text('전체 동의', style: TextStyle(fontWeight: FontWeight.bold)),
+                    title: const Text('전체 동의', style: TextStyle(fontWeight: FontWeight.w600)),
                     value: _isAllAgreed,
                     onChanged: _toggleAll,
-                    activeColor: _brandOrange,
+                    activeColor: brandPrimary,
                     controlAffinity: ListTileControlAffinity.leading,
+                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
                   ),
-                  const Divider(height: 1),
+                  const Divider(height: 1, color: brandBorder),
                   _TermsAccordion(
                     title: '[필수] 서비스 이용약관 동의',
                     content: _serviceTermsText,
@@ -4139,15 +4178,10 @@ class _AuthScreenState extends State<AuthScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             FilledButton(
               onPressed:
                   _isSubmitting || !_allRequiredAgreed ? null : _submitSignUp,
-              style: FilledButton.styleFrom(
-                backgroundColor: _brandOrange,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
               child: _isSubmitting
                   ? const SizedBox(
                       width: 22,
@@ -6708,7 +6742,7 @@ class _TermsAccordion extends StatelessWidget {
             child: Checkbox(
               value: value,
               onChanged: onChanged,
-              activeColor: _brandOrange,
+              activeColor: brandPrimary,
             ),
           ),
           const SizedBox(width: 8),
@@ -6793,25 +6827,26 @@ class _TermsAgreementScreenState extends State<TermsAgreementScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           const Text(
-            '서비스 이용을 위해\\n약관에 동의해주세요.',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+            '서비스 이용을 위해\n약관에 동의해주세요.',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: brandPrimary),
           ),
           const SizedBox(height: 32),
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFEDEDED)),
-              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: brandBorder),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
               children: [
                 CheckboxListTile(
-                  title: const Text('전체 동의', style: TextStyle(fontWeight: FontWeight.bold)),
+                  title: const Text('전체 동의', style: TextStyle(fontWeight: FontWeight.w600)),
                   value: _isAllAgreed,
                   onChanged: _toggleAll,
-                  activeColor: _brandOrange,
+                  activeColor: brandPrimary,
                   controlAffinity: ListTileControlAffinity.leading,
+                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
                 ),
-                const Divider(height: 1),
+                const Divider(height: 1, color: brandBorder),
                 _TermsAccordion(
                   title: '[필수] 서비스 이용약관 동의',
                   content: _serviceTermsText,
@@ -6842,11 +6877,6 @@ class _TermsAgreementScreenState extends State<TermsAgreementScreen> {
           const SizedBox(height: 32),
           FilledButton(
             onPressed: _allRequiredAgreed && !_isSubmitting ? _submit : null,
-            style: FilledButton.styleFrom(
-              backgroundColor: _brandOrange,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
             child: _isSubmitting
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                 : const Text('동의 완료'),

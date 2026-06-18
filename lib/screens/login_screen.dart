@@ -266,26 +266,18 @@ class _LoginScreenState extends State<LoginScreen> {
               controller: _emailController,
               validator: _required,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(hintText: '이메일'),
+              decoration: _inputDecoration('이메일'),
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _passwordController,
               validator: _required,
               obscureText: true,
-              decoration: const InputDecoration(hintText: '비밀번호'),
+              decoration: _inputDecoration('비밀번호'),
             ),
             const SizedBox(height: 18),
             FilledButton(
               onPressed: _isSubmitting ? null : _submitLogin,
-              style: FilledButton.styleFrom(
-                backgroundColor: _brandOrange,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
               child: _isSubmitting
                   ? const SizedBox(
                       width: 22,
@@ -305,21 +297,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   context,
                 ).push(MaterialPageRoute(builder: (_) => const AuthScreen())),
                 style: TextButton.styleFrom(
-                  foregroundColor: _ink,
+                  foregroundColor: brandInk,
                   textStyle: const TextStyle(fontSize: 13),
                 ),
                 child: const Text('아직 계정이 없나요? 회원가입'),
               ),
             ),
             const SizedBox(height: 16),
-            const Row(
+            Row(
               children: [
-                Expanded(child: Divider()),
+                const Expanded(child: Divider(color: brandBorder)),
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('또는', style: TextStyle(color: _muted, fontSize: 13)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('또는', style: TextStyle(color: brandMuted, fontSize: 13)),
                 ),
-                Expanded(child: Divider()),
+                const Expanded(child: Divider(color: brandBorder)),
               ],
             ),
             const SizedBox(height: 16),
@@ -328,7 +320,7 @@ class _LoginScreenState extends State<LoginScreen> {
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 side: const BorderSide(color: brandBorder),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               icon: _isGoogleSubmitting
                   ? const SizedBox(
@@ -341,9 +333,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: 20,
                       height: 20,
                     ),
-              label: const Text('Google로 계속하기', style: TextStyle(color: _ink)),
+              label: const Text('Google로 계속하기', style: TextStyle(color: brandInk)),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             ElevatedButton.icon(
               onPressed: _isKakaoSubmitting ? null : _signInWithKakao,
               style: ElevatedButton.styleFrom(
@@ -351,7 +343,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 side: BorderSide.none,
               ),
               icon: _isKakaoSubmitting
@@ -364,6 +356,28 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: brandMuted, fontSize: 14),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: brandBorder),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: brandBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: brandPrimary, width: 1.4),
       ),
     );
   }
