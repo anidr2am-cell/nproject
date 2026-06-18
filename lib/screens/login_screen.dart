@@ -43,16 +43,12 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       if (kIsWeb) {
         print('[KAKAO] initiating redirect login (web)');
-        try {
-          await kakao_sdk.UserApi.instance.loginWithKakaoAccount();
-          print('[KAKAO] authorization request sent');
-          return; // 리다이렉트 시 페이지가 이동하므로 이후 코드는 실행되지 않음
-        } catch (error) {
-          print('[KAKAO] exception=$error');
-          debugPrint('웹 카카오 로그인 리다이렉트 요청 실패: $error');
-          _showMessage('카카오 리다이렉트 로그인 실패');
-          return;
-        }
+        js.context.callMethod('eval', ['''
+          Kakao.Auth.authorize({
+            redirectUri: 'https://82saja.com/kakao-callback'
+          });
+        ''']);
+        return;
       }
 
       kakao_sdk.OAuthToken token;
