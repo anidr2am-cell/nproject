@@ -150,7 +150,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       bottomNavigationBar: SafeArea(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFEDEDED)))),
+          decoration: const BoxDecoration(border: Border(top: BorderSide(color: brandBorder))),
           child: _isOwner
               ? Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -159,7 +159,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       onPressed: _editListing,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: ink,
-                        side: const BorderSide(color: Color(0xFFE0E0E0)),
+                        side: const BorderSide(color: brandBorder),
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       ),
                       child: const Text('수정'),

@@ -98,7 +98,7 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
                     height: 1,
                     indent: 112,
                     endIndent: 20,
-                    color: Color(0xFFEDEDED),
+                    color: brandBorder,
                   ),
                   itemBuilder: (context, index) {
                     final doc = docs[index];
@@ -133,7 +133,7 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFEDEDED))),
+        border: Border(bottom: BorderSide(color: brandBorder)),
       ),
       child: Column(
         children: [
@@ -158,7 +158,7 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                     side: BorderSide(
-                      color: _selectedTradeType == type ? brandOrange : const Color(0xFFE0E0E0),
+                      color: _selectedTradeType == type ? brandOrange : brandBorder,
                     ),
                   ),
                 ),
@@ -187,7 +187,7 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                     side: BorderSide(
-                      color: _selectedPropertyType == type ? brandOrange : const Color(0xFFE0E0E0),
+                      color: _selectedPropertyType == type ? brandOrange : brandBorder,
                     ),
                   ),
                 ),
@@ -229,7 +229,7 @@ class _RealEstateTile extends StatelessWidget {
               width: 78,
               height: 78,
               decoration: BoxDecoration(
-                color: const Color(0xFFF5F5F5),
+                color: brandBackground,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: thumbnailUrl != null
@@ -265,7 +265,7 @@ class _RealEstateTile extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
-                      color: brandOrange,
+                      color: brandSecondary,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -279,7 +279,7 @@ class _RealEstateTile extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF5F5F5),
+                      color: brandBackground,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(

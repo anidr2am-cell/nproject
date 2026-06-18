@@ -8,12 +8,13 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao_sdk;
+import '../constants/colors.dart';
 import 'auth_screen.dart';
 
-const _brandOrange = Color(0xFFFF6F0F);
-const _ink = Color(0xFF222222);
-const _muted = Color(0xFF767676);
-const _surface = Color(0xFFF7F8FA);
+const _brandOrange = brandPrimary;
+const _ink = brandInk;
+const _muted = brandMuted;
+const _surface = brandBackground;
 const _firebaseRequestTimeout = Duration(seconds: 15);
 
 class LoginScreen extends StatefulWidget {
@@ -326,7 +327,7 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: _isGoogleSubmitting ? null : _signInWithGoogle,
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                side: const BorderSide(color: Color(0xFFDDDDDD)),
+                side: const BorderSide(color: brandBorder),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               ),
               icon: _isGoogleSubmitting

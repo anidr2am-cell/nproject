@@ -215,7 +215,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       height: 1,
                       indent: 112,
                       endIndent: 20,
-                      color: Color(0xFFEDEDED),
+                      color: brandBorder,
                     ),
                     itemBuilder: (context, index) {
                       final listing = listings[index];

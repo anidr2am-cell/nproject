@@ -174,14 +174,14 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                     widget.data['dealType'] == '월세'
                         ? '보증금 ${widget.data['deposit'] ?? ''} / 월세 ${widget.data['monthlyRent'] ?? ''}'
                         : '매매가 ${widget.data['price'] ?? ''}',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: brandOrange),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: brandSecondary),
                   ),
-                  const Divider(height: 40),
+                  const Divider(height: 40, color: brandBorder),
                   _buildDetailRow('주소', widget.data['address'] ?? ''),
                   _buildDetailRow('면적', '${widget.data['area'] ?? '-'} ㎡'),
                   _buildDetailRow('층수', '${widget.data['floor'] ?? '-'} 층'),
                   _buildDetailRow('방/욕실', '${widget.data['rooms'] ?? '-'}개 / ${widget.data['bathrooms'] ?? '-'}개'),
-                  const Divider(height: 40),
+                  const Divider(height: 40, color: brandBorder),
                   const Text('상세 설명', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   Text(
@@ -199,7 +199,7 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: Color(0xFFEDEDED))),
+            border: Border(top: BorderSide(color: brandBorder)),
           ),
           child: _isOwner
               ? Row(
@@ -209,7 +209,7 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                       onPressed: _editListing,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: ink,
-                        side: const BorderSide(color: Color(0xFFE0E0E0)),
+                        side: const BorderSide(color: brandBorder),
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       ),
                       child: const Text('수정'),

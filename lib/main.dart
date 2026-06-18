@@ -18,6 +18,7 @@ import 'dart:js' as js;
 import 'dart:js_util' as js_util;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'constants/colors.dart';
 import 'screens/real_estate_screen.dart';
 import 'package:kakao_flutter_sdk_common/kakao_flutter_sdk_common.dart';
 
@@ -169,10 +170,10 @@ String _firebaseMessage(FirebaseException error) {
   };
 }
 
-const _brandOrange = Color(0xFFFF6F0F);
-const _ink = Color(0xFF222222);
-const _muted = Color(0xFF767676);
-const _surface = Color(0xFFF7F8FA);
+const _brandOrange = brandPrimary;
+const _ink = brandInk;
+const _muted = brandMuted;
+const _surface = brandBackground;
 const _warning = Color(0xFFFFF3E8);
 const _playStoreUrl =
     'https://play.google.com/store/apps/details?id=com.nproject.nproject';
@@ -188,34 +189,36 @@ class NprojectApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: _brandOrange,
-          primary: _brandOrange,
-          surface: Colors.white,
+          seedColor: brandPrimary,
+          primary: brandPrimary,
+          secondary: brandSecondary,
+          surface: brandBackground,
         ),
-        scaffoldBackgroundColor: Colors.white,
+        scaffoldBackgroundColor: brandBackground,
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: _ink,
+          backgroundColor: brandBackground,
+          foregroundColor: brandInk,
           elevation: 0,
           centerTitle: false,
           titleTextStyle: TextStyle(
-            color: _ink,
+            color: brandInk,
             fontSize: 20,
             fontWeight: FontWeight.w800,
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: _surface,
+          fillColor: Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: _brandOrange, width: 1.4),
+            borderSide: const BorderSide(color: brandPrimary, width: 1.4),
           ),
         ),
+        dividerColor: brandBorder,
       ),
       home: const AppShell(),
     );

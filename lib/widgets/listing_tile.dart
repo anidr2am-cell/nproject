@@ -108,6 +108,7 @@ class ListingTile extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
+                      color: brandSecondary,
                     ),
                   ),
                   const SizedBox(height: 4),

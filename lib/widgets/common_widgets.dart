@@ -130,13 +130,14 @@ class TradeLocationText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPrice = label.contains('가격') || label.contains('가');
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFEDEDED)),
+        border: Border.all(color: brandBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,7 +146,11 @@ class TradeLocationText extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             value,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: isPrice ? brandSecondary : brandInk,
+            ),
           ),
         ],
       ),
@@ -163,17 +168,18 @@ class TypePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: brandOrange.withValues(alpha: 0.1),
+        color: brandPrimary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         text,
         style: const TextStyle(
-          color: brandOrange,
-          fontSize: 11,
-          fontWeight: FontWeight.w900,
+          color: brandPrimary,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
   }
 }
+
