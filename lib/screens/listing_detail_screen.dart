@@ -132,9 +132,19 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_listing.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  Text(
+                    _listing.title,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                      color: brandPrimary,
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  Text('${_listing.category} · ${_listing.postedAgo}', style: const TextStyle(color: muted)),
+                  Text(
+                    '${_listing.category} · ${_listing.postedAgo}',
+                    style: const TextStyle(color: brandMuted),
+                  ),
                   const Divider(height: 32),
                   Text(_listing.description, style: const TextStyle(fontSize: 16, height: 1.5)),
                   const SizedBox(height: 20),
@@ -191,7 +201,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => ChatRoomScreen(chatRoomId: _listing.id)),
                       ),
-                      style: FilledButton.styleFrom(backgroundColor: brandOrange),
                       child: const Text('채팅하기'),
                     ),
                   ],

@@ -219,6 +219,49 @@ class NprojectApp extends StatelessWidget {
           ),
         ),
         dividerColor: brandBorder,
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: brandPrimary,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 0,
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: brandPrimary,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 0,
+          ),
+        ),
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: brandSecondary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 4,
+        ),
+        chipTheme: ChipThemeData(
+          backgroundColor: Colors.white,
+          selectedColor: brandPrimary,
+          secondarySelectedColor: brandPrimary,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: brandBorder),
+          ),
+          labelStyle: const TextStyle(color: brandInk, fontSize: 13),
+          secondaryLabelStyle: const TextStyle(color: Colors.white, fontSize: 13),
+          brightness: Brightness.light,
+        ),
       ),
       home: const AppShell(),
     );
@@ -451,20 +494,6 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      HomeScreen(
-        onWrite: _handleWriteTap,
-        initialCategory: _selectedHomeCategory,
-        initialType: _selectedHomeType,
-      ),
-      CategoryScreen(
-        onCategorySelected: _handleCategorySelected,
-        onTypeSelected: _handleTypeSelected,
-      ),
-      PostListingScreen(onSubmitSuccess: _moveToHomeTab),
-      const MyPageScreen(),
-    ];
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -502,7 +531,22 @@ class _AppShellState extends State<AppShell> {
         }
       },
       child: Scaffold(
-        body: pages[_index],
+        body: IndexedStack(
+          index: _index,
+          children: [
+            HomeScreen(
+              onWrite: _handleWriteTap,
+              initialCategory: _selectedHomeCategory,
+              initialType: _selectedHomeType,
+            ),
+            CategoryScreen(
+              onCategorySelected: _handleCategorySelected,
+              onTypeSelected: _handleTypeSelected,
+            ),
+            PostListingScreen(onSubmitSuccess: _moveToHomeTab),
+            const MyPageScreen(),
+          ],
+        ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           indicatorColor: _brandOrange.withValues(alpha: 0.12),
@@ -783,6 +827,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         backgroundColor: _brandOrange,
         foregroundColor: Colors.white,
         onPressed: widget.onWrite,
@@ -1257,114 +1302,124 @@ class ListingTile extends StatelessWidget {
         ? listing.photoUrls.first
         : null;
 
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Hero(
-              tag: listing.id,
-              child: Container(
-                width: 78,
-                height: 78,
-                decoration: BoxDecoration(
-                  color: listing.color,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: imageUrl == null
-                    ? Icon(listing.icon, color: Colors.white, size: 34)
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-                          errorBuilder: (_, _, _) =>
-                              Icon(listing.icon, color: Colors.white, size: 34),
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          listing.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: brandBorder, width: 1),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Hero(
+                tag: listing.id,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: listing.color,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: imageUrl == null
+                      ? Icon(listing.icon, color: Colors.white, size: 34)
+                      : ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+                            errorBuilder: (_, _, _) =>
+                                Icon(listing.icon, color: Colors.white, size: 34),
                           ),
                         ),
-                      ),
-
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          _TypePill(text: listing.type.label),
-                          const SizedBox(height: 4),
-                          Text(
-                            listing.status == 'sold'
-                                ? '판매완료'
-                                : listing.status == 'reserved'
-                                ? '거래 예약중'
-                                : '판매중',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: listing.status == 'sold'
-                                  ? _muted
-                                  : listing.status == 'reserved'
-                                  ? Colors.blue
-                                  : _brandOrange,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            listing.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: brandPrimary,
                             ),
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${listing.place} · ${listing.postedAgo}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _muted, fontSize: 13),
-                  ),
-                  const SizedBox(height: 7),
-                  Text(
-                    listing.price,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  InkWell(
-                    onTap: () => _showSellerProfile(context, listing),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.person_outline,
-                          size: 15,
-                          color: _muted,
                         ),
-                        const SizedBox(width: 4),
-                        _SellerTradeLine(listing: listing),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            _TypePill(text: listing.type.label),
+                            const SizedBox(height: 4),
+                            Text(
+                              listing.status == 'sold'
+                                  ? '판매완료'
+                                  : listing.status == 'reserved'
+                                  ? '거래 예약중'
+                                  : '판매중',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: listing.status == 'sold'
+                                    ? brandMuted
+                                    : listing.status == 'reserved'
+                                    ? Colors.blue
+                                    : brandPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      '${listing.place} · ${listing.postedAgo}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: brandMuted, fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      listing.price,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: brandSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () => _showSellerProfile(context, listing),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.person_outline,
+                            size: 15,
+                            color: brandMuted,
+                          ),
+                          const SizedBox(width: 4),
+                          _SellerTradeLine(listing: listing),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1733,41 +1788,38 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
           decoration: const BoxDecoration(
             color: Colors.white,
-            border: Border(top: BorderSide(color: Color(0xFFEDEDED))),
+            border: Border(top: BorderSide(color: brandBorder)),
           ),
           child: isOwner
               ? Row(
                   children: [
-                    const Spacer(),
-                    OutlinedButton(
-                      onPressed: _openEditScreen,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _ink,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 14,
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _openEditScreen,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: brandInk,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
+                        child: const Text('물품 수정'),
                       ),
-                      child: const Text('물품 수정'),
                     ),
                     const SizedBox(width: 8),
-                    OutlinedButton(
-                      onPressed: _deleteListing,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red.shade700,
-                        side: BorderSide(color: Colors.red.shade200),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 14,
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _deleteListing,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red.shade700,
+                          side: BorderSide(color: Colors.red.shade200),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
+                        child: const Text('물품 삭제'),
                       ),
-                      child: const Text('물품 삭제'),
                     ),
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFEDEDED)),
+                        border: Border.all(color: brandBorder),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: DropdownButtonHideUnderline(
@@ -1808,26 +1860,24 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 )
               : Row(
                   children: [
-                    const Spacer(),
                     _FavoriteBottomButton(listingId: listing.id),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: () => _openChatForListing(context, listing),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _brandOrange,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => _openChatForListing(context, listing),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: brandPrimary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.chat_bubble_outline, size: 18),
-                          SizedBox(width: 8),
-                          Text('메시지 보내기'),
-                        ],
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.chat_bubble_outline, size: 18),
+                            SizedBox(width: 8),
+                            Text('메시지 보내기'),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -4020,14 +4070,19 @@ class _RecentNotificationsSection extends StatelessWidget {
       children: [
         const Text(
           '최근 알림',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: brandPrimary,
+          ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFFEDEDED)),
-            borderRadius: BorderRadius.circular(8),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: brandBorder),
           ),
           child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
@@ -5186,22 +5241,23 @@ class _ProfileHeader extends StatelessWidget {
         : displayName.characters.first;
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: brandBorder),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            radius: 28,
-            backgroundColor: user == null ? _muted : _brandOrange,
+            radius: 32,
+            backgroundColor: user == null ? brandMuted : brandPrimary,
             child: Text(
               initial,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -5213,14 +5269,15 @@ class _ProfileHeader extends StatelessWidget {
                 Text(
                   user == null ? displayName : '$displayName 님',
                   style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: brandPrimary,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   user == null ? '로그인 후 계정 정보를 확인하세요.' : user!.email ?? '',
-                  style: const TextStyle(color: _muted),
+                  style: const TextStyle(color: brandMuted, fontSize: 13),
                 ),
               ],
             ),
@@ -5474,35 +5531,46 @@ class _ChatRoomsPanel extends StatelessWidget {
       children: [
         const Text(
           '채팅 목록',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFFEDEDED)),
-            borderRadius: BorderRadius.circular(8),
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: brandPrimary,
           ),
-          child: isLoading
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 28),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : rooms.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(emptyText, style: const TextStyle(color: _muted)),
-                )
-              : Column(
-                  children: [
-                    for (var i = 0; i < rooms.length; i++) ...[
-                      if (i > 0)
-                        const Divider(height: 1, color: Color(0xFFEDEDED)),
-                      _ChatRoomTile(room: rooms[i]),
-                    ],
-                  ],
-                ),
         ),
+        const SizedBox(height: 12),
+        if (isLoading)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 40),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: brandBorder),
+            ),
+            child: const Center(child: CircularProgressIndicator()),
+          )
+        else if (rooms.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: brandBorder),
+            ),
+            child: Text(
+              emptyText,
+              style: const TextStyle(color: brandMuted, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          )
+        else
+          Column(
+            children: [
+              for (var i = 0; i < rooms.length; i++)
+                _ChatRoomTile(room: rooms[i]),
+            ],
+          ),
       ],
     );
   }
@@ -5525,87 +5593,100 @@ class _ChatRoomTile extends StatelessWidget {
     final lastMessage = _stringValue(data['lastMessage'], '아직 메시지가 없습니다.');
     final imageUrl = _stringValue(data['listingPhotoUrl'], '');
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      leading: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: _surface,
-          borderRadius: BorderRadius.circular(6),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: brandBorder, width: 1),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        leading: Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            color: brandBackground,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: imageUrl.isEmpty
+              ? const Icon(Icons.chat_bubble_outline, color: brandMuted)
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.chat_bubble_outline, color: brandMuted),
+                  ),
+                ),
         ),
-        child: imageUrl.isEmpty
-            ? const Icon(Icons.chat_bubble_outline, color: _muted)
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-                  errorBuilder: (_, _, _) =>
-                      const Icon(Icons.chat_bubble_outline, color: _muted),
-                ),
-              ),
-      ),
-      title: Text(
-        '$otherName · $listingTitle',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w800),
-      ),
-      subtitle: Text(
-        lastMessage,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: _muted),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.close, size: 20, color: _muted),
-            onPressed: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('채팅방 삭제'),
-                  content: const Text('채팅방을 삭제하시겠습니까?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('취소'),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: const Text('삭제'),
-                    ),
-                  ],
-                ),
-              );
-              if (confirm == true) {
-                await _deleteChatRoom(room.id);
-              }
-            },
+        title: Text(
+          '$otherName · $listingTitle',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: brandPrimary,
+            fontSize: 15,
           ),
-          const Icon(Icons.chevron_right, color: _muted),
-        ],
-      ),
-      onTap: () async {
-        final listingId = _stringValue(data['listingId'], '');
-        final listing = listingId.isEmpty
-            ? null
-            : await _findListingById(listingId);
-        if (!context.mounted) return;
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ChatRoomScreen(
-              roomId: room.id,
-              listing: listing,
-              otherUserName: otherName,
+        ),
+        subtitle: Text(
+          lastMessage,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: brandMuted, fontSize: 13),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.close, size: 20, color: brandMuted),
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('채팅방 삭제'),
+                    content: const Text('채팅방을 삭제하시겠습니까?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('취소'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('삭제'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  await _deleteChatRoom(room.id);
+                }
+              },
             ),
-          ),
-        );
-      },
+            const Icon(Icons.chevron_right, color: brandMuted, size: 20),
+          ],
+        ),
+        onTap: () async {
+          final listingId = _stringValue(data['listingId'], '');
+          final listing = listingId.isEmpty
+              ? null
+              : await _findListingById(listingId);
+          if (!context.mounted) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ChatRoomScreen(
+                roomId: room.id,
+                listing: listing,
+                otherUserName: otherName,
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -5630,35 +5711,46 @@ class _MyPageListingSection extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFFEDEDED)),
-            borderRadius: BorderRadius.circular(8),
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: brandPrimary,
           ),
-          child: isLoading
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 28),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : listings.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(emptyText, style: const TextStyle(color: _muted)),
-                )
-              : Column(
-                  children: [
-                    for (var i = 0; i < listings.length; i++) ...[
-                      if (i > 0)
-                        const Divider(height: 1, color: Color(0xFFEDEDED)),
-                      _MyPageListingTile(listing: listings[i]),
-                    ],
-                  ],
-                ),
         ),
+        const SizedBox(height: 12),
+        if (isLoading)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 40),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: brandBorder),
+            ),
+            child: const Center(child: CircularProgressIndicator()),
+          )
+        else if (listings.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: brandBorder),
+            ),
+            child: Text(
+              emptyText,
+              style: const TextStyle(color: brandMuted, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          )
+        else
+          Column(
+            children: [
+              for (var i = 0; i < listings.length; i++)
+                _MyPageListingTile(listing: listings[i]),
+            ],
+          ),
       ],
     );
   }
@@ -5671,46 +5763,63 @@ class _MyPageListingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ListingDetailScreen(listing: listing),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: brandBorder, width: 1),
+      ),
+      child: ListTile(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ListingDetailScreen(listing: listing),
+          ),
         ),
-      ),
-      leading: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: listing.color,
-          borderRadius: BorderRadius.circular(6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        leading: Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            color: brandBackground,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: listing.photoUrls.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    listing.photoUrls.first,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        Icon(listing.icon, color: brandMuted, size: 24),
+                  ),
+                )
+              : Icon(listing.icon, color: brandMuted, size: 24),
         ),
-        child: listing.photoUrls.isNotEmpty
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.network(
-                  listing.photoUrls.first,
-                  width: 44,
-                  height: 44,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) =>
-                      Icon(listing.icon, color: Colors.white, size: 22),
-                ),
-              )
-            : Icon(listing.icon, color: Colors.white, size: 22),
+        title: Text(
+          listing.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: brandPrimary,
+            fontSize: 15,
+          ),
+        ),
+        subtitle: Text(
+          '${listing.price} · ${listing.place}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: brandSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        trailing: const Icon(Icons.chevron_right, color: brandMuted, size: 20),
       ),
-      title: Text(
-        listing.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w700),
-      ),
-      subtitle: Text(
-        '${listing.price} · ${listing.place}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: _muted, fontSize: 12),
-      ),
-      trailing: const Icon(Icons.chevron_right, color: _muted),
     );
   }
 }

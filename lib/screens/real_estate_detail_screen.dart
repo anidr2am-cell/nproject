@@ -160,21 +160,29 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                       const SizedBox(width: 8),
                       Text(
                         widget.data['dealType'] ?? '',
-                        style: const TextStyle(color: muted, fontSize: 14),
+                        style: const TextStyle(color: brandMuted, fontSize: 14),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Text(
                     widget.data['title'] ?? '제목 없음',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                      color: brandPrimary,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     widget.data['dealType'] == '월세'
                         ? '보증금 ${widget.data['deposit'] ?? ''} / 월세 ${widget.data['monthlyRent'] ?? ''}'
                         : '매매가 ${widget.data['price'] ?? ''}',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: brandSecondary),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: brandSecondary,
+                    ),
                   ),
                   const Divider(height: 40, color: brandBorder),
                   _buildDetailRow('주소', widget.data['address'] ?? ''),
@@ -182,7 +190,7 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                   _buildDetailRow('층수', '${widget.data['floor'] ?? '-'} 층'),
                   _buildDetailRow('방/욕실', '${widget.data['rooms'] ?? '-'}개 / ${widget.data['bathrooms'] ?? '-'}개'),
                   const Divider(height: 40, color: brandBorder),
-                  const Text('상세 설명', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text('상세 설명', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: brandPrimary)),
                   const SizedBox(height: 12),
                   Text(
                     widget.data['description'] ?? '',
@@ -236,7 +244,7 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                           widget.data['sellerNickname'] ?? '익명',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                         ),
-                        const Text('중개인/등록자', style: TextStyle(color: muted, fontSize: 12)),
+                        const Text('중개인/등록자', style: TextStyle(color: brandMuted, fontSize: 12)),
                       ],
                     ),
                     const Spacer(),
@@ -248,10 +256,6 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                           ),
                         );
                       },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: brandOrange,
-                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                      ),
                       child: const Text('채팅하기'),
                     ),
                   ],
@@ -268,7 +272,7 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
         children: [
           SizedBox(
             width: 80,
-            child: Text(label, style: const TextStyle(color: muted, fontSize: 15)),
+            child: Text(label, style: const TextStyle(color: brandMuted, fontSize: 15)),
           ),
           Expanded(
             child: Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),

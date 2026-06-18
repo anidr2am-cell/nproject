@@ -116,8 +116,7 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: brandOrange,
-        foregroundColor: Colors.white,
+        heroTag: null,
         onPressed: () {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const RealEstateWriteScreen()),
@@ -131,15 +130,16 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
 
   Widget _buildFilterBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: const BoxDecoration(
+        color: Colors.white,
         border: Border(bottom: BorderSide(color: brandBorder)),
       ),
       child: Column(
         children: [
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: _tradeTypes.map((type) => Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -149,16 +149,16 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
                   onSelected: (_) => setState(() => _selectedTradeType = type),
                   showCheckmark: false,
                   labelStyle: TextStyle(
-                    color: _selectedTradeType == type ? Colors.white : ink,
-                    fontWeight: _selectedTradeType == type ? FontWeight.bold : FontWeight.normal,
+                    color: _selectedTradeType == type ? Colors.white : brandInk,
+                    fontWeight: _selectedTradeType == type ? FontWeight.w600 : FontWeight.normal,
                     fontSize: 13,
                   ),
-                  selectedColor: brandOrange,
-                  backgroundColor: surface,
+                  selectedColor: brandPrimary,
+                  backgroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                     side: BorderSide(
-                      color: _selectedTradeType == type ? brandOrange : brandBorder,
+                      color: _selectedTradeType == type ? brandPrimary : brandBorder,
                     ),
                   ),
                 ),
@@ -168,7 +168,7 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
           const SizedBox(height: 8),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: _propertyTypes.map((type) => Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -178,16 +178,16 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
                   onSelected: (_) => setState(() => _selectedPropertyType = type),
                   showCheckmark: false,
                   labelStyle: TextStyle(
-                    color: _selectedPropertyType == type ? Colors.white : ink,
-                    fontWeight: _selectedPropertyType == type ? FontWeight.bold : FontWeight.normal,
+                    color: _selectedPropertyType == type ? Colors.white : brandInk,
+                    fontWeight: _selectedPropertyType == type ? FontWeight.w600 : FontWeight.normal,
                     fontSize: 13,
                   ),
-                  selectedColor: brandOrange,
-                  backgroundColor: surface,
+                  selectedColor: brandPrimary,
+                  backgroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                     side: BorderSide(
-                      color: _selectedPropertyType == type ? brandOrange : brandBorder,
+                      color: _selectedPropertyType == type ? brandPrimary : brandBorder,
                     ),
                   ),
                 ),
@@ -212,85 +212,99 @@ class _RealEstateTile extends StatelessWidget {
     final photoUrls = data['photoUrls'] as List?;
     final thumbnailUrl = (photoUrls != null && photoUrls.isNotEmpty) ? photoUrls.first : null;
 
-    return InkWell(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => RealEstateDetailScreen(docId: docId, data: data),
-          ),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 78,
-              height: 78,
-              decoration: BoxDecoration(
-                color: brandBackground,
-                borderRadius: BorderRadius.circular(8),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: brandBorder, width: 1),
+      ),
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => RealEstateDetailScreen(docId: docId, data: data),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: brandBackground,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: thumbnailUrl != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          thumbnailUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.home_work, color: Colors.grey, size: 34),
+                        ),
+                      )
+                    : const Icon(Icons.home_work, color: Colors.grey, size: 34),
               ),
-              child: thumbnailUrl != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        thumbnailUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.home_work, color: Colors.grey, size: 34),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      data['title'] ?? '제목 없음',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: brandPrimary,
                       ),
-                    )
-                  : const Icon(Icons.home_work, color: Colors.grey, size: 34),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    data['title'] ?? '제목 없음',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    data['dealType'] == '월세'
-                        ? '월세 ${data['deposit'] ?? ''}/${data['monthlyRent'] ?? ''}'
-                        : '매매 ${data['price'] ?? ''}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: brandSecondary,
+                    const SizedBox(height: 4),
+                    Text(
+                      data['dealType'] == '월세'
+                          ? '월세 ${data['deposit'] ?? ''}/${data['monthlyRent'] ?? ''}'
+                          : '매매 ${data['price'] ?? ''}',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: brandSecondary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${data['address'] ?? ''} · $timeAgo',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: muted, fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: brandBackground,
-                      borderRadius: BorderRadius.circular(4),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${data['address'] ?? ''} · $timeAgo',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: brandMuted, fontSize: 13),
                     ),
-                    child: Text(
-                      data['propertyType'] ?? '',
-                      style: const TextStyle(color: muted, fontSize: 10),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: brandPrimary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        data['propertyType'] ?? '',
+                        style: const TextStyle(
+                          color: brandPrimary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
