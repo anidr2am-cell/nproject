@@ -175,6 +175,9 @@ const _ink = brandInk;
 const _muted = brandMuted;
 const _surface = brandBackground;
 const _warning = Color(0xFFFFF3E8);
+const _homeCategorySelectedColor = Color(0xFF3E6280);
+const _homeCategoryUnselectedBorder = Color(0xFFE5E7EB);
+const _homeCategoryUnselectedText = Color(0xFF1C2B3A);
 const _playStoreUrl =
     'https://play.google.com/store/apps/details?id=com.nproject.nproject';
 
@@ -258,7 +261,7 @@ class NprojectApp extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             side: const BorderSide(color: brandBorder),
           ),
-          labelStyle: const TextStyle(color: brandInk, fontSize: 13),
+          labelStyle: const TextStyle(color: brandInk, fontSize: 14, fontWeight: FontWeight.w700),
           secondaryLabelStyle: const TextStyle(color: Colors.white, fontSize: 13),
           brightness: Brightness.light,
         ),
@@ -829,12 +832,30 @@ class _HomeScreenState extends State<HomeScreen> {
                       itemBuilder: (context, index) {
                         final category = categories[index];
                         final isAll = index == 0;
+                        final isSelected =
+                            isAll ? _selectedCategory == null : _selectedCategory == category;
+                        final foregroundColor =
+                            isSelected ? Colors.white : _homeCategoryUnselectedText;
                         return FilterChip(
-                          avatar: isAll ? const Icon(Icons.grid_view, size: 18) : null,
-                          selected:
-                              isAll ? _selectedCategory == null : _selectedCategory == category,
+                          avatar: isAll
+                              ? Icon(Icons.grid_view, size: 18, color: foregroundColor)
+                              : null,
+                          selected: isSelected,
                           showCheckmark: false,
-                          label: Text(category),
+                          backgroundColor: Colors.white,
+                          selectedColor: _homeCategorySelectedColor,
+                          side: BorderSide(
+                            color: isSelected
+                                ? _homeCategorySelectedColor
+                                : _homeCategoryUnselectedBorder,
+                          ),
+                          label: Text(
+                            category,
+                            style: TextStyle(
+                              color: foregroundColor,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           onSelected: (_) {
                             setState(() {
                               _selectedCategory = isAll ? null : category;
@@ -1353,10 +1374,17 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final foregroundColor =
+        isSelected ? Colors.white : _homeCategoryUnselectedText;
     return Container(
       decoration: BoxDecoration(
-        color: isSelected ? _brandOrange : Colors.transparent,
+        color: isSelected ? _homeCategorySelectedColor : Colors.white,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isSelected
+              ? _homeCategorySelectedColor
+              : _homeCategoryUnselectedBorder,
+        ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -1367,7 +1395,7 @@ class _QuickAction extends StatelessWidget {
             children: [
               Icon(
                 icon,
-                color: isSelected ? Colors.white : _brandOrange,
+                color: foregroundColor,
                 size: 26,
               ),
               const SizedBox(height: 8),
@@ -1377,7 +1405,7 @@ class _QuickAction extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
-                  color: isSelected ? Colors.white : _ink,
+                  color: foregroundColor,
                 ),
               ),
               const SizedBox(height: 2),
@@ -1386,7 +1414,7 @@ class _QuickAction extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: isSelected ? Colors.white70 : _muted,
+                  color: foregroundColor,
                   fontSize: 12,
                 ),
               ),
@@ -2989,15 +3017,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
             runSpacing: 10,
             children: categories.map((category) {
               final isSelected = _selectedCategory == category;
-              return ActionChip(
-                label: Text(category),
-                avatar: const Icon(Icons.sell_outlined, size: 18),
-                backgroundColor:
-                    isSelected ? _brandOrange.withValues(alpha: 0.12) : null,
-                labelStyle: TextStyle(
-                  color: isSelected ? _brandOrange : null,
-                  fontWeight: isSelected ? FontWeight.w900 : null,
-                ),
+              return CategoryChip(
+                label: category,
+                icon: Icons.sell_outlined,
+                isSelected: isSelected,
                 onPressed: () {
                   widget.onCategorySelected(category);
                 },
@@ -3014,14 +3037,16 @@ class _CategoryScreenState extends State<CategoryScreen> {
             spacing: 10,
             runSpacing: 10,
             children: [
-              ActionChip(
-                label: Text(ListingType.request.label),
-                avatar: Icon(ListingType.request.icon, size: 18),
+              CategoryChip(
+                label: ListingType.request.label,
+                icon: ListingType.request.icon,
+                fontWeight: FontWeight.w600,
                 onPressed: () => widget.onTypeSelected(ListingType.request),
               ),
-              ActionChip(
-                label: Text(ListingType.currency.label),
-                avatar: Icon(ListingType.currency.icon, size: 18),
+              CategoryChip(
+                label: ListingType.currency.label,
+                icon: ListingType.currency.icon,
+                fontWeight: FontWeight.w600,
                 onPressed: () => widget.onTypeSelected(ListingType.currency),
               ),
             ],
@@ -3096,6 +3121,61 @@ class _CategoryScreenState extends State<CategoryScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class CategoryChip extends StatelessWidget {
+  const CategoryChip({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.isSelected = false,
+    this.fontWeight,
+    super.key,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool isSelected;
+  final FontWeight? fontWeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final foregroundColor = isSelected ? _brandOrange : const Color(0xFF1C2B3A);
+    final effectiveFontWeight =
+        fontWeight ?? (isSelected ? FontWeight.w900 : FontWeight.w700);
+
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? _brandOrange.withValues(alpha: 0.12) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? _brandOrange : const Color(0xFFEDEBE5),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: foregroundColor),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: foregroundColor,
+                fontSize: 14,
+                fontWeight: effectiveFontWeight,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
