@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/market_listing.dart';
 import '../constants/colors.dart';
 import '../services/firebase_service.dart';
+import '../utils/price_formatter.dart';
 import 'common_widgets.dart';
 
 class ListingTile extends StatelessWidget {
@@ -47,8 +48,11 @@ class ListingTile extends StatelessWidget {
                           child: Image.network(
                             imageUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
-                                Icon(listing.icon, color: Colors.white, size: 34),
+                            errorBuilder: (_, _, _) => Icon(
+                              listing.icon,
+                              color: Colors.white,
+                              size: 34,
+                            ),
                           ),
                         ),
                 ),
@@ -106,7 +110,7 @@ class ListingTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      listing.price,
+                      formatPrice(listing.price),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -136,7 +140,7 @@ class _SellerTradeLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const style = TextStyle(color: muted, fontSize: 12);
-    
+
     // FutureBuilder 내부의 Text 위젯에도 overflow 설정을 적용합니다.
     if (!needsSellerNicknameLookup(listing) ||
         listing.sellerUid?.trim().isNotEmpty != true) {

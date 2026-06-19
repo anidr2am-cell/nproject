@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../constants/colors.dart';
 import '../services/firebase_service.dart';
+import '../utils/price_formatter.dart';
 import 'login_screen.dart';
 
 class RealEstateWriteScreen extends StatefulWidget {
@@ -52,9 +53,9 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
       _dealType = data['dealType'] ?? '매매';
       _propertyType = data['propertyType'] ?? '아파트';
       _titleController.text = data['title'] ?? '';
-      _priceController.text = data['price'] ?? '';
-      _depositController.text = data['deposit'] ?? '';
-      _monthlyRentController.text = data['monthlyRent'] ?? '';
+      _priceController.text = formatPriceInput(data['price']);
+      _depositController.text = formatPriceInput(data['deposit']);
+      _monthlyRentController.text = formatPriceInput(data['monthlyRent']);
       _areaController.text = data['area'] ?? '';
       _roomsController.text = data['rooms'] ?? '';
       _bathroomsController.text = data['bathrooms'] ?? '';
@@ -85,9 +86,9 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
   Future<void> _pickImages() async {
     final totalPhotos = _pickedPhotos.length + _existingPhotoUrls.length;
     if (totalPhotos >= 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('사진은 최대 10장까지 등록 가능합니다.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('사진은 최대 10장까지 등록 가능합니다.')));
       return;
     }
 
@@ -100,7 +101,7 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
       if (picked.isNotEmpty) {
         final remaining = 10 - totalPhotos;
         final toAdd = picked.take(remaining).toList();
-        
+
         final List<Uint8List> newBytes = [];
         for (var file in toAdd) {
           newBytes.add(await file.readAsBytes());
@@ -152,7 +153,9 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
       return;
     }
 
@@ -161,15 +164,24 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
     try {
       final newPhotoUrls = await _uploadPhotos(user.uid);
       final finalPhotoUrls = [..._existingPhotoUrls, ...newPhotoUrls];
-      final nickname = await fetchNicknameForUid(user.uid, fallback: user.displayName ?? '익명');
+      final nickname = await fetchNicknameForUid(
+        user.uid,
+        fallback: user.displayName ?? '익명',
+      );
 
       final data = {
         'dealType': _dealType,
         'propertyType': _propertyType,
         'title': _titleController.text.trim(),
-        'price': _dealType == '매매' ? _priceController.text.trim() : '',
-        'deposit': _dealType == '월세' ? _depositController.text.trim() : '',
-        'monthlyRent': _dealType == '월세' ? _monthlyRentController.text.trim() : '',
+        'price': _dealType == '매매'
+            ? normalizePriceInput(_priceController.text)
+            : '',
+        'deposit': _dealType == '월세'
+            ? normalizePriceInput(_depositController.text)
+            : '',
+        'monthlyRent': _dealType == '월세'
+            ? normalizePriceInput(_monthlyRentController.text)
+            : '',
         'area': _areaController.text.trim(),
         'rooms': _roomsController.text.trim(),
         'bathrooms': _bathroomsController.text.trim(),
@@ -185,7 +197,10 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
       };
 
       if (_isEditMode) {
-        await FirebaseFirestore.instance.collection('realEstate').doc(widget.docId).update(data);
+        await FirebaseFirestore.instance
+            .collection('realEstate')
+            .doc(widget.docId)
+            .update(data);
       } else {
         await FirebaseFirestore.instance.collection('realEstate').add(data);
       }
@@ -193,15 +208,17 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_isEditMode ? '매물이 수정되었습니다.' : '매물이 등록되었습니다.')),
+          SnackBar(
+            content: Text(_isEditMode ? '매물이 수정되었습니다.' : '매물이 등록되었습니다.'),
+          ),
         );
       }
     } catch (e) {
       debugPrint('Error submitting real estate: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('처리 중 오류가 발생했습니다: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('처리 중 오류가 발생했습니다: $e')));
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -212,13 +229,20 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditMode ? '매물 수정' : '매물 등록', style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          _isEditMode ? '매물 수정' : '매물 등록',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           if (_isSubmitting)
             const Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
-                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ),
             )
           else
@@ -254,7 +278,11 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
             _buildLabel('부동산 종류'),
             DropdownButtonFormField<String>(
               value: _propertyType,
-              items: _propertyTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
+              items: _propertyTypes
+                  .map(
+                    (type) => DropdownMenuItem(value: type, child: Text(type)),
+                  )
+                  .toList(),
               onChanged: (val) => setState(() => _propertyType = val!),
               decoration: _inputDecoration('종류 선택'),
             ),
@@ -270,8 +298,11 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
               _buildLabel('매매가'),
               TextFormField(
                 controller: _priceController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [PriceInputFormatter()],
                 decoration: _inputDecoration('매매가를 입력하세요 (예: 15억)'),
-                validator: (v) => _dealType == '매매' && v!.isEmpty ? '매매가를 입력해주세요' : null,
+                validator: (v) =>
+                    _dealType == '매매' && v!.isEmpty ? '매매가를 입력해주세요' : null,
               ),
             ] else ...[
               Row(
@@ -283,8 +314,11 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
                         _buildLabel('보증금'),
                         TextFormField(
                           controller: _depositController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [PriceInputFormatter()],
                           decoration: _inputDecoration('보증금'),
-                          validator: (v) => _dealType == '월세' && v!.isEmpty ? '입력 필수' : null,
+                          validator: (v) =>
+                              _dealType == '월세' && v!.isEmpty ? '입력 필수' : null,
                         ),
                       ],
                     ),
@@ -297,8 +331,11 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
                         _buildLabel('월세'),
                         TextFormField(
                           controller: _monthlyRentController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [PriceInputFormatter()],
                           decoration: _inputDecoration('월세'),
-                          validator: (v) => _dealType == '월세' && v!.isEmpty ? '입력 필수' : null,
+                          validator: (v) =>
+                              _dealType == '월세' && v!.isEmpty ? '입력 필수' : null,
                         ),
                       ],
                     ),
@@ -412,7 +449,10 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.camera_alt, color: muted),
-                      Text('${_pickedPhotos.length + _existingPhotoUrls.length}/10', style: const TextStyle(color: muted, fontSize: 12)),
+                      Text(
+                        '${_pickedPhotos.length + _existingPhotoUrls.length}/10',
+                        style: const TextStyle(color: muted, fontSize: 12),
+                      ),
                     ],
                   ),
                 ),
@@ -440,8 +480,15 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
                         child: GestureDetector(
                           onTap: () => _removeExistingImage(index),
                           child: Container(
-                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                            child: const Icon(Icons.close, color: Colors.white, size: 18),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                           ),
                         ),
                       ),
@@ -473,8 +520,15 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
                         child: GestureDetector(
                           onTap: () => _removePickedImage(index),
                           child: Container(
-                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                            child: const Icon(Icons.close, color: Colors.white, size: 18),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                           ),
                         ),
                       ),
@@ -492,7 +546,10 @@ class _RealEstateWriteScreenState extends State<RealEstateWriteScreen> {
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+      ),
     );
   }
 

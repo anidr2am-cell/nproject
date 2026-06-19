@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
+import '../utils/price_formatter.dart';
 import 'chat_room_screen.dart';
 import 'real_estate_write_screen.dart';
 
@@ -10,7 +11,11 @@ class RealEstateDetailScreen extends StatefulWidget {
   final String docId;
   final Map<String, dynamic> data;
 
-  const RealEstateDetailScreen({required this.docId, required this.data, super.key});
+  const RealEstateDetailScreen({
+    required this.docId,
+    required this.data,
+    super.key,
+  });
 
   @override
   State<RealEstateDetailScreen> createState() => _RealEstateDetailScreenState();
@@ -32,7 +37,10 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
         title: const Text('매물 삭제'),
         content: const Text('정말로 이 매물을 삭제하시겠습니까?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('삭제', style: TextStyle(color: Colors.red)),
@@ -57,20 +65,23 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
       }
 
       // 2. Firestore에서 문서 삭제
-      await FirebaseFirestore.instance.collection('realEstate').doc(widget.docId).delete();
+      await FirebaseFirestore.instance
+          .collection('realEstate')
+          .doc(widget.docId)
+          .delete();
 
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('매물이 삭제되었습니다.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('매물이 삭제되었습니다.')));
       }
     } catch (e) {
       debugPrint('Error deleting listing: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('삭제 중 오류가 발생했습니다: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('삭제 중 오류가 발생했습니다: $e')));
       }
     }
   }
@@ -112,21 +123,30 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                           itemCount: imageCount,
                           onPageChanged: (v) => setState(() => _imageIndex = v),
                           itemBuilder: (context, index) {
-                            return Image.network(photoUrls![index], fit: BoxFit.cover);
+                            return Image.network(
+                              photoUrls![index],
+                              fit: BoxFit.cover,
+                            );
                           },
                         ),
                         Positioned(
                           bottom: 16,
                           right: 16,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black.withOpacity(0.5),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                               '${_imageIndex + 1} / $imageCount',
-                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ),
@@ -134,7 +154,11 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                     )
                   : Container(
                       color: const Color(0xFFF5F5F5),
-                      child: const Icon(Icons.home_work, size: 80, color: Colors.grey),
+                      child: const Icon(
+                        Icons.home_work,
+                        size: 80,
+                        color: Colors.grey,
+                      ),
                     ),
             ),
           ),
@@ -147,14 +171,21 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: brandOrange.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           widget.data['propertyType'] ?? '',
-                          style: const TextStyle(color: brandOrange, fontSize: 12, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: brandOrange,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -176,8 +207,8 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                   const SizedBox(height: 8),
                   Text(
                     widget.data['dealType'] == '월세'
-                        ? '보증금 ${widget.data['deposit'] ?? ''} / 월세 ${widget.data['monthlyRent'] ?? ''}'
-                        : '매매가 ${widget.data['price'] ?? ''}',
+                        ? '보증금 ${formatPrice(widget.data['deposit'])} / 월세 ${formatPrice(widget.data['monthlyRent'])}'
+                        : '매매가 ${formatPrice(widget.data['price'])}',
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
@@ -188,9 +219,19 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                   _buildDetailRow('주소', widget.data['address'] ?? ''),
                   _buildDetailRow('면적', '${widget.data['area'] ?? '-'} ㎡'),
                   _buildDetailRow('층수', '${widget.data['floor'] ?? '-'} 층'),
-                  _buildDetailRow('방/욕실', '${widget.data['rooms'] ?? '-'}개 / ${widget.data['bathrooms'] ?? '-'}개'),
+                  _buildDetailRow(
+                    '방/욕실',
+                    '${widget.data['rooms'] ?? '-'}개 / ${widget.data['bathrooms'] ?? '-'}개',
+                  ),
                   const Divider(height: 40, color: brandBorder),
-                  const Text('상세 설명', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: brandPrimary)),
+                  const Text(
+                    '상세 설명',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: brandPrimary,
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     widget.data['description'] ?? '',
@@ -218,7 +259,10 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: ink,
                         side: const BorderSide(color: brandBorder),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                       ),
                       child: const Text('수정'),
                     ),
@@ -228,7 +272,10 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                         side: const BorderSide(color: Colors.red),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                       ),
                       child: const Text('삭제'),
                     ),
@@ -242,9 +289,15 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                       children: [
                         Text(
                           widget.data['sellerNickname'] ?? '익명',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
-                        const Text('중개인/등록자', style: TextStyle(color: brandMuted, fontSize: 12)),
+                        const Text(
+                          '중개인/등록자',
+                          style: TextStyle(color: brandMuted, fontSize: 12),
+                        ),
                       ],
                     ),
                     const Spacer(),
@@ -252,7 +305,8 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => ChatRoomScreen(chatRoomId: widget.docId),
+                            builder: (_) =>
+                                ChatRoomScreen(chatRoomId: widget.docId),
                           ),
                         );
                       },
@@ -272,10 +326,16 @@ class _RealEstateDetailScreenState extends State<RealEstateDetailScreen> {
         children: [
           SizedBox(
             width: 80,
-            child: Text(label, style: const TextStyle(color: brandMuted, fontSize: 15)),
+            child: Text(
+              label,
+              style: const TextStyle(color: brandMuted, fontSize: 15),
+            ),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+            ),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
+import '../utils/price_formatter.dart';
 import 'real_estate_detail_screen.dart';
 import 'real_estate_write_screen.dart';
 
@@ -53,11 +54,14 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  debugPrint('[RealEstateScreen] Firestore Error: ${snapshot.error}');
+                  debugPrint(
+                    '[RealEstateScreen] Firestore Error: ${snapshot.error}',
+                  );
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
-                      child: Text('데이터를 불러오는 중 오류가 발생했습니다.\n${snapshot.error}', 
+                      child: Text(
+                        '데이터를 불러오는 중 오류가 발생했습니다.\n${snapshot.error}',
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: Colors.red, fontSize: 12),
                       ),
@@ -72,10 +76,19 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
 
                 // Client-side filtering
                 if (_selectedTradeType != '전체') {
-                  docs = docs.where((doc) => doc.data()['dealType'] == _selectedTradeType).toList();
+                  docs = docs
+                      .where(
+                        (doc) => doc.data()['dealType'] == _selectedTradeType,
+                      )
+                      .toList();
                 }
                 if (_selectedPropertyType != '전체') {
-                  docs = docs.where((doc) => doc.data()['propertyType'] == _selectedPropertyType).toList();
+                  docs = docs
+                      .where(
+                        (doc) =>
+                            doc.data()['propertyType'] == _selectedPropertyType,
+                      )
+                      .toList();
                 }
 
                 if (docs.isEmpty) {
@@ -83,9 +96,16 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.home_work_outlined, size: 48, color: Colors.grey),
+                        Icon(
+                          Icons.home_work_outlined,
+                          size: 48,
+                          color: Colors.grey,
+                        ),
                         SizedBox(height: 16),
-                        Text('등록된 매물이 없습니다.', style: TextStyle(color: Colors.grey)),
+                        Text(
+                          '등록된 매물이 없습니다.',
+                          style: TextStyle(color: Colors.grey),
+                        ),
                       ],
                     ),
                   );
@@ -141,28 +161,39 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
-              children: _tradeTypes.map((type) => Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(type),
-                  selected: _selectedTradeType == type,
-                  onSelected: (_) => setState(() => _selectedTradeType = type),
-                  showCheckmark: false,
-                  labelStyle: TextStyle(
-                    color: _selectedTradeType == type ? Colors.white : brandInk,
-                    fontWeight: _selectedTradeType == type ? FontWeight.w600 : FontWeight.normal,
-                    fontSize: 13,
-                  ),
-                  selectedColor: brandPrimary,
-                  backgroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: _selectedTradeType == type ? brandPrimary : brandBorder,
+              children: _tradeTypes
+                  .map(
+                    (type) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: Text(type),
+                        selected: _selectedTradeType == type,
+                        onSelected: (_) =>
+                            setState(() => _selectedTradeType = type),
+                        showCheckmark: false,
+                        labelStyle: TextStyle(
+                          color: _selectedTradeType == type
+                              ? Colors.white
+                              : brandInk,
+                          fontWeight: _selectedTradeType == type
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          fontSize: 13,
+                        ),
+                        selectedColor: brandPrimary,
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: BorderSide(
+                            color: _selectedTradeType == type
+                                ? brandPrimary
+                                : brandBorder,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              )).toList(),
+                  )
+                  .toList(),
             ),
           ),
           const SizedBox(height: 8),
@@ -170,28 +201,39 @@ class _RealEstateScreenState extends State<RealEstateScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
-              children: _propertyTypes.map((type) => Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(type),
-                  selected: _selectedPropertyType == type,
-                  onSelected: (_) => setState(() => _selectedPropertyType = type),
-                  showCheckmark: false,
-                  labelStyle: TextStyle(
-                    color: _selectedPropertyType == type ? Colors.white : brandInk,
-                    fontWeight: _selectedPropertyType == type ? FontWeight.w600 : FontWeight.normal,
-                    fontSize: 13,
-                  ),
-                  selectedColor: brandPrimary,
-                  backgroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: _selectedPropertyType == type ? brandPrimary : brandBorder,
+              children: _propertyTypes
+                  .map(
+                    (type) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: Text(type),
+                        selected: _selectedPropertyType == type,
+                        onSelected: (_) =>
+                            setState(() => _selectedPropertyType = type),
+                        showCheckmark: false,
+                        labelStyle: TextStyle(
+                          color: _selectedPropertyType == type
+                              ? Colors.white
+                              : brandInk,
+                          fontWeight: _selectedPropertyType == type
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          fontSize: 13,
+                        ),
+                        selectedColor: brandPrimary,
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: BorderSide(
+                            color: _selectedPropertyType == type
+                                ? brandPrimary
+                                : brandBorder,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              )).toList(),
+                  )
+                  .toList(),
             ),
           ),
         ],
@@ -205,12 +247,18 @@ class _RealEstateTile extends StatelessWidget {
   final Map<String, dynamic> data;
   final String timeAgo;
 
-  const _RealEstateTile({required this.docId, required this.data, required this.timeAgo});
+  const _RealEstateTile({
+    required this.docId,
+    required this.data,
+    required this.timeAgo,
+  });
 
   @override
   Widget build(BuildContext context) {
     final photoUrls = data['photoUrls'] as List?;
-    final thumbnailUrl = (photoUrls != null && photoUrls.isNotEmpty) ? photoUrls.first : null;
+    final thumbnailUrl = (photoUrls != null && photoUrls.isNotEmpty)
+        ? photoUrls.first
+        : null;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -246,7 +294,11 @@ class _RealEstateTile extends StatelessWidget {
                         child: Image.network(
                           thumbnailUrl,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(Icons.home_work, color: Colors.grey, size: 34),
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.home_work,
+                            color: Colors.grey,
+                            size: 34,
+                          ),
                         ),
                       )
                     : const Icon(Icons.home_work, color: Colors.grey, size: 34),
@@ -269,8 +321,8 @@ class _RealEstateTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       data['dealType'] == '월세'
-                          ? '월세 ${data['deposit'] ?? ''}/${data['monthlyRent'] ?? ''}'
-                          : '매매 ${data['price'] ?? ''}',
+                          ? '월세 ${formatPrice(data['deposit'])}/${formatPrice(data['monthlyRent'])}'
+                          : '매매 ${formatPrice(data['price'])}',
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
@@ -286,7 +338,10 @@ class _RealEstateTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: brandPrimary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
@@ -310,4 +365,3 @@ class _RealEstateTile extends StatelessWidget {
     );
   }
 }
-

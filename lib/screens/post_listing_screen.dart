@@ -9,6 +9,7 @@ import '../constants/categories.dart';
 import '../models/listing_type.dart';
 import '../models/market_listing.dart';
 import '../services/firebase_service.dart';
+import '../utils/price_formatter.dart';
 import 'login_screen.dart';
 
 class PostListingScreen extends StatefulWidget {
@@ -52,7 +53,7 @@ class _PostListingScreenState extends State<PostListingScreen> {
     if (widget.isEditing && widget.initialListing != null) {
       final listing = widget.initialListing!;
       _titleController.text = listing.title;
-      _priceController.text = listing.price;
+      _priceController.text = formatPriceInput(listing.price);
       _placeController.text = listing.place;
       _descriptionController.text = listing.description;
       _type = listing.type;
@@ -75,9 +76,9 @@ class _PostListingScreenState extends State<PostListingScreen> {
   Future<void> _pickImages() async {
     final totalPhotos = _pickedPhotos.length + _existingPhotoUrls.length;
     if (totalPhotos >= 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('사진은 최대 10장까지 등록 가능합니다.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('사진은 최대 10장까지 등록 가능합니다.')));
       return;
     }
 
@@ -90,7 +91,7 @@ class _PostListingScreenState extends State<PostListingScreen> {
       if (picked.isNotEmpty) {
         final remaining = 10 - totalPhotos;
         final toAdd = picked.take(remaining).toList();
-        
+
         final List<Uint8List> newBytes = [];
         for (var file in toAdd) {
           newBytes.add(await file.readAsBytes());
@@ -142,7 +143,9 @@ class _PostListingScreenState extends State<PostListingScreen> {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
       return;
     }
 
@@ -151,12 +154,15 @@ class _PostListingScreenState extends State<PostListingScreen> {
     try {
       final newPhotoUrls = await _uploadPhotos(user.uid);
       final finalPhotoUrls = [..._existingPhotoUrls, ...newPhotoUrls];
-      final nickname = await fetchNicknameForUid(user.uid, fallback: user.displayName ?? '익명');
+      final nickname = await fetchNicknameForUid(
+        user.uid,
+        fallback: user.displayName ?? '익명',
+      );
 
       final data = {
         'type': _type.name,
         'title': _titleController.text.trim(),
-        'price': _priceController.text.trim(),
+        'price': normalizePriceInput(_priceController.text),
         'place': _placeController.text.trim(),
         'description': _descriptionController.text.trim(),
         'category': _type == ListingType.used ? _category : _type.label,
@@ -169,7 +175,10 @@ class _PostListingScreenState extends State<PostListingScreen> {
       };
 
       if (widget.isEditing) {
-        await FirebaseFirestore.instance.collection('listings').doc(widget.editingListingId).update(data);
+        await FirebaseFirestore.instance
+            .collection('listings')
+            .doc(widget.editingListingId)
+            .update(data);
       } else {
         await FirebaseFirestore.instance.collection('listings').add(data);
       }
@@ -181,15 +190,17 @@ class _PostListingScreenState extends State<PostListingScreen> {
           Navigator.of(context).pop(true);
         }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.isEditing ? '글이 수정되었습니다.' : '글이 등록되었습니다.')),
+          SnackBar(
+            content: Text(widget.isEditing ? '글이 수정되었습니다.' : '글이 등록되었습니다.'),
+          ),
         );
       }
     } catch (e) {
       debugPrint('Error submitting listing: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('처리 중 오류가 발생했습니다: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('처리 중 오류가 발생했습니다: $e')));
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -200,13 +211,20 @@ class _PostListingScreenState extends State<PostListingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.isEditing ? '글 수정' : '중고거래 글쓰기', style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          widget.isEditing ? '글 수정' : '중고거래 글쓰기',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           if (_isSubmitting)
             const Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
-                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ),
             )
           else
@@ -230,16 +248,24 @@ class _PostListingScreenState extends State<PostListingScreen> {
           children: [
             _buildPhotoPicker(),
             const SizedBox(height: 24),
-            const Text('카테고리', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const Text(
+              '카테고리',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               value: _category,
-              items: categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
+              items: categories
+                  .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                  .toList(),
               onChanged: (val) => setState(() => _category = val!),
               decoration: _inputDecoration('카테고리 선택'),
             ),
             const SizedBox(height: 20),
-            const Text('제목', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const Text(
+              '제목',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
             const SizedBox(height: 8),
             TextFormField(
               controller: _titleController,
@@ -247,22 +273,33 @@ class _PostListingScreenState extends State<PostListingScreen> {
               validator: (v) => v!.isEmpty ? '제목을 입력해주세요' : null,
             ),
             const SizedBox(height: 20),
-            const Text('가격', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const Text(
+              '가격',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
             const SizedBox(height: 8),
             TextFormField(
               controller: _priceController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [PriceInputFormatter()],
               decoration: _inputDecoration('가격을 입력하세요 (예: 10,000원)'),
               validator: (v) => v!.isEmpty ? '가격을 입력해주세요' : null,
             ),
             const SizedBox(height: 20),
-            const Text('거래 장소', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const Text(
+              '거래 장소',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
             const SizedBox(height: 8),
             TextFormField(
               controller: _placeController,
               decoration: _inputDecoration('거래 장소를 입력하세요'),
             ),
             const SizedBox(height: 20),
-            const Text('상세 설명', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const Text(
+              '상세 설명',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
             const SizedBox(height: 8),
             TextFormField(
               controller: _descriptionController,
@@ -281,7 +318,10 @@ class _PostListingScreenState extends State<PostListingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('사진 (최대 10장)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const Text(
+          '사진 (최대 10장)',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
         const SizedBox(height: 8),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -300,7 +340,10 @@ class _PostListingScreenState extends State<PostListingScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.camera_alt, color: muted),
-                      Text('${_pickedPhotos.length + _existingPhotoUrls.length}/10', style: const TextStyle(color: muted, fontSize: 12)),
+                      Text(
+                        '${_pickedPhotos.length + _existingPhotoUrls.length}/10',
+                        style: const TextStyle(color: muted, fontSize: 12),
+                      ),
                     ],
                   ),
                 ),
@@ -327,8 +370,15 @@ class _PostListingScreenState extends State<PostListingScreen> {
                         child: GestureDetector(
                           onTap: () => _removeExistingImage(index),
                           child: Container(
-                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                            child: const Icon(Icons.close, color: Colors.white, size: 18),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                           ),
                         ),
                       ),
@@ -359,8 +409,15 @@ class _PostListingScreenState extends State<PostListingScreen> {
                         child: GestureDetector(
                           onTap: () => _removePickedImage(index),
                           child: Container(
-                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                            child: const Icon(Icons.close, color: Colors.white, size: 18),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                           ),
                         ),
                       ),

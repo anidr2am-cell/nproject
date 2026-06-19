@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:html' as html;
 
 import 'package:flutter/foundation.dart';
@@ -20,6 +20,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'constants/colors.dart';
 import 'screens/real_estate_screen.dart';
+import 'utils/price_formatter.dart';
 import 'package:kakao_flutter_sdk_common/kakao_flutter_sdk_common.dart';
 
 const _firebaseRequestTimeout = Duration(seconds: 15);
@@ -28,12 +29,12 @@ String? _firebaseInitMessage;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // 글로벌 에러 핸들러 추가
   FlutterError.onError = (details) {
     final exception = details.exceptionAsString();
     final stack = details.stack.toString();
-    
+
     // 기본 디버그 출력
     debugPrint('[FLUTTER ERROR]');
     debugPrint(exception);
@@ -107,7 +108,7 @@ Future<void> main() async {
 
     if (_firebaseReady) {
       // FCM 초기화 (UI 준비 후 AppShell에서 호출)
-      _initFcm(); 
+      _initFcm();
     }
   } on FirebaseException catch (error, stackTrace) {
     _firebaseReady = false;
@@ -261,8 +262,15 @@ class NprojectApp extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             side: const BorderSide(color: brandBorder),
           ),
-          labelStyle: const TextStyle(color: brandInk, fontSize: 14, fontWeight: FontWeight.w700),
-          secondaryLabelStyle: const TextStyle(color: Colors.white, fontSize: 13),
+          labelStyle: const TextStyle(
+            color: brandInk,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+          secondaryLabelStyle: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+          ),
           brightness: Brightness.light,
         ),
       ),
@@ -347,20 +355,25 @@ class _AppShellState extends State<AppShell> {
 
     // 로딩 표시를 위해 임시로 MyPage 탭으로 이동하거나 스낵바 표시 가능
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('카카오 로그인 중...'), duration: Duration(seconds: 2)),
+      const SnackBar(
+        content: Text('카카오 로그인 중...'),
+        duration: Duration(seconds: 2),
+      ),
     );
 
     try {
       // 1. 액세스 토큰 및 사용자 정보 통합 조회 (Firebase Hosting Rewrite를 통한 Same-Origin 호출로 CORS/CORB 해결)
       debugPrint('[KAKAO] initiating token & user info request to backend');
-      final apiResponse = await http.post(
-        Uri.parse('https://82saja.com/api/kakao-token'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'redirect_uri': 'https://82saja.com/kakao-callback',
-          'code': code,
-        }),
-      ).timeout(_firebaseRequestTimeout);
+      final apiResponse = await http
+          .post(
+            Uri.parse('https://82saja.com/api/kakao-token'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({
+              'redirect_uri': 'https://82saja.com/kakao-callback',
+              'code': code,
+            }),
+          )
+          .timeout(_firebaseRequestTimeout);
 
       if (apiResponse.statusCode != 200) {
         throw Exception('API 호출 실패: ${apiResponse.body}');
@@ -382,10 +395,11 @@ class _AppShellState extends State<AppShell> {
       }
 
       String nickname = '카카오사용자';
-      if (userData['properties'] != null && userData['properties']['nickname'] != null) {
+      if (userData['properties'] != null &&
+          userData['properties']['nickname'] != null) {
         nickname = userData['properties']['nickname'].toString();
       }
-      
+
       final email = '$kakaoId@kakao.wonbaht.com';
       final password = 'kakao_${kakaoId}_wonbaht';
 
@@ -394,39 +408,42 @@ class _AppShellState extends State<AppShell> {
       debugPrint('[KAKAO] nickname=$nickname');
       debugPrint('[KAKAO] password.length=${password.length}');
       debugPrint('[KAKAO] starting firebase login');
-      
+
       UserCredential userCredential;
       try {
         // 1. 먼저 로그인 시도
-        userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: email,
-          password: password,
-        ).timeout(_firebaseRequestTimeout);
+        userCredential = await FirebaseAuth.instance
+            .signInWithEmailAndPassword(email: email, password: password)
+            .timeout(_firebaseRequestTimeout);
         debugPrint('[FIREBASE] login success uid=${userCredential.user?.uid}');
       } catch (e) {
         // 2. 실패하면 회원가입 후 로그인
         debugPrint('[FIREBASE] signIn failed, trying to create user: $e');
-        userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: email,
-          password: password,
-        ).timeout(_firebaseRequestTimeout);
-        
+        userCredential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(email: email, password: password)
+            .timeout(_firebaseRequestTimeout);
+
         await userCredential.user?.updateDisplayName(nickname);
-        
+
         // Firestore 유저 정보 초기화
-        await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-          'uid': userCredential.user!.uid,
-          'nickname': nickname,
-          'email': email,
-          'termsAccepted': true,
-          'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .set({
+              'uid': userCredential.user!.uid,
+              'nickname': nickname,
+              'email': email,
+              'termsAccepted': true,
+              'createdAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
         debugPrint('[FIREBASE] createUser success & login');
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('카카오 계정으로 로그인되었습니다.')));
-      
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('카카오 계정으로 로그인되었습니다.')));
+
       // 4. URL 클린업 및 홈으로 이동
       html.window.history.replaceState(null, '', '/');
       setState(() => _index = 0);
@@ -434,7 +451,9 @@ class _AppShellState extends State<AppShell> {
       debugPrint('[KAKAO] exception in callback: $e');
       debugPrint('[AppShell] Kakao Callback Error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('카카오 로그인 처리 중 오류가 발생했습니다.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('카카오 로그인 처리 중 오류가 발생했습니다.')),
+        );
         html.window.history.replaceState(null, '', '/');
       }
     }
@@ -557,7 +576,8 @@ class _AppShellState extends State<AppShell> {
             Container(
               color: brandBackground,
               padding: EdgeInsets.only(
-                bottom: html.window.navigator.userAgent.contains('iPhone') ||
+                bottom:
+                    html.window.navigator.userAgent.contains('iPhone') ||
                         html.window.navigator.userAgent.contains('iPad')
                     ? 20
                     : 8,
@@ -669,11 +689,7 @@ class _AppShellState extends State<AppShell> {
             else
               const SizedBox(height: 4),
             const SizedBox(height: 2),
-            Icon(
-              isSelected ? selectedIcon : icon,
-              color: color,
-              size: 22,
-            ),
+            Icon(isSelected ? selectedIcon : icon, color: color, size: 22),
             const SizedBox(height: 4),
             Text(
               label,
@@ -832,13 +848,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       itemBuilder: (context, index) {
                         final category = categories[index];
                         final isAll = index == 0;
-                        final isSelected =
-                            isAll ? _selectedCategory == null : _selectedCategory == category;
-                        final foregroundColor =
-                            isSelected ? Colors.white : _homeCategoryUnselectedText;
+                        final isSelected = isAll
+                            ? _selectedCategory == null
+                            : _selectedCategory == category;
+                        final foregroundColor = isSelected
+                            ? Colors.white
+                            : _homeCategoryUnselectedText;
                         return FilterChip(
                           avatar: isAll
-                              ? Icon(Icons.grid_view, size: 18, color: foregroundColor)
+                              ? Icon(
+                                  Icons.grid_view,
+                                  size: 18,
+                                  color: foregroundColor,
+                                )
                               : null,
                           selected: isSelected,
                           showCheckmark: false,
@@ -910,9 +932,11 @@ class _HomeScreenState extends State<HomeScreen> {
               }
               if (_searchQuery.trim().isNotEmpty) {
                 listings = listings
-                    .where((l) => l.title
-                        .toLowerCase()
-                        .contains(_searchQuery.trim().toLowerCase()))
+                    .where(
+                      (l) => l.title.toLowerCase().contains(
+                        _searchQuery.trim().toLowerCase(),
+                      ),
+                    )
                     .toList();
               }
 
@@ -1233,10 +1257,8 @@ class _NotificationTile extends StatelessWidget {
             ),
           IconButton(
             icon: const Icon(Icons.close, size: 20, color: _muted),
-            onPressed: () => _deleteNotification(
-              _currentUserOrNull()!.uid,
-              notification.id,
-            ),
+            onPressed: () =>
+                _deleteNotification(_currentUserOrNull()!.uid, notification.id),
           ),
         ],
       ),
@@ -1374,8 +1396,9 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foregroundColor =
-        isSelected ? Colors.white : _homeCategoryUnselectedText;
+    final foregroundColor = isSelected
+        ? Colors.white
+        : _homeCategoryUnselectedText;
     return Container(
       decoration: BoxDecoration(
         color: isSelected ? _homeCategorySelectedColor : Colors.white,
@@ -1393,11 +1416,7 @@ class _QuickAction extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: Column(
             children: [
-              Icon(
-                icon,
-                color: foregroundColor,
-                size: 26,
-              ),
+              Icon(icon, color: foregroundColor, size: 26),
               const SizedBox(height: 8),
               Text(
                 title,
@@ -1413,10 +1432,7 @@ class _QuickAction extends StatelessWidget {
                 subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: foregroundColor,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: foregroundColor, fontSize: 12),
               ),
             ],
           ),
@@ -1469,9 +1485,13 @@ class ListingTile extends StatelessWidget {
                           child: Image.network(
                             imageUrl,
                             fit: BoxFit.cover,
-                            webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-                            errorBuilder: (_, _, _) =>
-                                Icon(listing.icon, color: Colors.white, size: 34),
+                            webHtmlElementStrategy:
+                                WebHtmlElementStrategy.prefer,
+                            errorBuilder: (_, _, _) => Icon(
+                              listing.icon,
+                              color: Colors.white,
+                              size: 34,
+                            ),
                           ),
                         ),
                 ),
@@ -1529,7 +1549,7 @@ class ListingTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      listing.price,
+                      formatPrice(listing.price),
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
@@ -1901,7 +1921,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     style: const TextStyle(fontSize: 16, height: 1.5),
                   ),
                   const SizedBox(height: 20),
-                  _TradeLocationText(value: listing.price, label: '가격'),
+                  _TradeLocationText(
+                    value: formatPrice(listing.price),
+                    label: '가격',
+                  ),
                   const SizedBox(height: 12),
                   _TradeLocationText(
                     value: listing.placeNote,
@@ -2033,7 +2056,7 @@ Future<void> _showShareSheet(
       'https://github.com/anidr2am-cell/nproject/releases/latest';
   final shareText = [
     '[Nproject] ${listing.title}',
-    listing.price,
+    formatPrice(listing.price),
     '앱 설치됨: $appLink',
     '앱 미설치: $fallbackLink',
   ].join('\n');
@@ -2461,10 +2484,14 @@ Future<void> _initFcm() async {
 
 Future<void> _saveFcmToken(String uid, String token) async {
   try {
-    await FirebaseFirestore.instance.collection('users').doc(uid).update({
-      'fcmToken': token,
-      'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
-    }).timeout(_firebaseRequestTimeout);
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .update({
+          'fcmToken': token,
+          'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+        })
+        .timeout(_firebaseRequestTimeout);
     debugPrint('[FCM] Token saved to Firestore');
   } catch (e) {
     debugPrint('[FCM] Failed to save token: $e');
@@ -2781,10 +2808,16 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       onSubmitted: (_) => _sendMessage(),
                       decoration: InputDecoration(
                         hintText: '메시지를 입력하세요',
-                        hintStyle: const TextStyle(color: brandMuted, fontSize: 14),
+                        hintStyle: const TextStyle(
+                          color: brandMuted,
+                          fontSize: 14,
+                        ),
                         filled: true,
                         fillColor: brandBackground,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
                           borderSide: BorderSide.none,
@@ -2795,7 +2828,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
-                          borderSide: const BorderSide(color: brandPrimary, width: 1),
+                          borderSide: const BorderSide(
+                            color: brandPrimary,
+                            width: 1,
+                          ),
                         ),
                       ),
                     ),
@@ -2884,7 +2920,7 @@ class _ChatListingHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  listing.price,
+                  formatPrice(listing.price),
                   style: const TextStyle(
                     color: brandSecondary,
                     fontSize: 13,
@@ -3154,7 +3190,9 @@ class CategoryChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? _brandOrange.withValues(alpha: 0.12) : Colors.white,
+          color: isSelected
+              ? _brandOrange.withValues(alpha: 0.12)
+              : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected ? _brandOrange : const Color(0xFFEDEBE5),
@@ -3234,7 +3272,7 @@ class _PostListingScreenState extends State<PostListingScreen> {
     _tradeType = listing.tradeType;
     _titleController.text = listing.title;
     _nameController.text = listing.itemName ?? '';
-    _priceController.text = listing.price;
+    _priceController.text = formatPriceInput(listing.price);
     _placeController.text = listing.place;
     _descriptionController.text = listing.description;
     _contactController.text = listing.contactNote ?? '';
@@ -3324,7 +3362,7 @@ class _PostListingScreenState extends State<PostListingScreen> {
   }) {
     final title = _titleController.text.trim();
     final name = _nameController.text.trim();
-    final price = _priceController.text.trim();
+    final price = normalizePriceInput(_priceController.text);
     final place = _placeController.text.trim();
     final description = _descriptionController.text.trim();
     final contact = _contactController.text.trim();
@@ -3729,6 +3767,7 @@ class _UsedListingForm extends StatelessWidget {
           controller: priceController,
           validator: validator,
           keyboardType: TextInputType.number,
+          inputFormatters: [PriceInputFormatter()],
           decoration: InputDecoration(
             hintText: tradeType == 'buy' ? '희망 구매 금액 입력' : 'THB 또는 KRW 금액 입력',
           ),
@@ -3810,6 +3849,7 @@ class _DeliveryRequestForm extends StatelessWidget {
           controller: feeController,
           validator: validator,
           keyboardType: TextInputType.number,
+          inputFormatters: [PriceInputFormatter()],
           decoration: InputDecoration(
             hintText: requestType == 'offer' ? '예: 500 THB' : '예: 700 THB',
           ),
@@ -3898,6 +3938,7 @@ class _CurrencyExchangeForm extends StatelessWidget {
           controller: amountController,
           validator: validator,
           keyboardType: TextInputType.number,
+          inputFormatters: [PriceInputFormatter()],
           decoration: InputDecoration(
             hintText: tradeType == 'buy' ? '예: 10,000 THB' : '예: 5,000 THB',
           ),
@@ -4212,7 +4253,11 @@ class _AuthScreenState extends State<AuthScreen> {
             const SizedBox(height: 32),
             const Text(
               '약관 동의',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: brandPrimary),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: brandPrimary,
+              ),
             ),
             const SizedBox(height: 12),
             Container(
@@ -4223,12 +4268,19 @@ class _AuthScreenState extends State<AuthScreen> {
               child: Column(
                 children: [
                   CheckboxListTile(
-                    title: const Text('전체 동의', style: TextStyle(fontWeight: FontWeight.w600)),
+                    title: const Text(
+                      '전체 동의',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
                     value: _isAllAgreed,
                     onChanged: _toggleAll,
                     activeColor: brandPrimary,
                     controlAffinity: ListTileControlAffinity.leading,
-                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(16),
+                      ),
+                    ),
                   ),
                   const Divider(height: 1, color: brandBorder),
                   _TermsAccordion(
@@ -4241,7 +4293,8 @@ class _AuthScreenState extends State<AuthScreen> {
                     title: '[필수] 개인정보 처리방침 동의',
                     content: _privacyPolicyText,
                     value: _agreePrivacy,
-                    onChanged: (v) => setState(() => _agreePrivacy = v ?? false),
+                    onChanged: (v) =>
+                        setState(() => _agreePrivacy = v ?? false),
                   ),
                   _TermsAccordion(
                     title: '[필수] 거래 주의사항 동의',
@@ -4253,15 +4306,17 @@ class _AuthScreenState extends State<AuthScreen> {
                     title: '[선택] 마케팅 정보 수신 동의',
                     content: _marketingConsentText,
                     value: _agreeMarketing,
-                    onChanged: (v) => setState(() => _agreeMarketing = v ?? false),
+                    onChanged: (v) =>
+                        setState(() => _agreeMarketing = v ?? false),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 32),
             FilledButton(
-              onPressed:
-                  _isSubmitting || !_allRequiredAgreed ? null : _submitSignUp,
+              onPressed: _isSubmitting || !_allRequiredAgreed
+                  ? null
+                  : _submitSignUp,
               child: _isSubmitting
                   ? const SizedBox(
                       width: 22,
@@ -4454,11 +4509,13 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isKakaoSubmitting = true);
     try {
       if (kIsWeb) {
-        js.context.callMethod('eval', ['''
+        js.context.callMethod('eval', [
+          '''
           Kakao.Auth.authorize({
             redirectUri: 'https://82saja.com/kakao-callback'
           });
-        ''']);
+        ''',
+        ]);
       }
     } catch (e) {
       debugPrint('[LoginScreen] Kakao Login Error: $e');
@@ -4467,60 +4524,62 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-Future<void> _signInWithGoogle() async {
-  final unavailableMessage = _firebaseUnavailableMessage();
-  if (unavailableMessage != null) {
-    _showMessage(unavailableMessage);
-    return;
-  }
-  setState(() => _isGoogleSubmitting = true);
-  try {
-    final googleUser = await GoogleSignIn().signIn();
-    if (googleUser == null) return; // 사용자가 취소
-    final googleAuth = await googleUser.authentication;
-    final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
-    );
-    final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-    final user = userCredential.user;
+  Future<void> _signInWithGoogle() async {
+    final unavailableMessage = _firebaseUnavailableMessage();
+    if (unavailableMessage != null) {
+      _showMessage(unavailableMessage);
+      return;
+    }
+    setState(() => _isGoogleSubmitting = true);
+    try {
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return; // 사용자가 취소
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      final user = userCredential.user;
 
-    if (user != null && mounted) {
-      // Firestore에서 약관 동의 여부 확인
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get()
-          .timeout(_firebaseRequestTimeout);
+      if (user != null && mounted) {
+        // Firestore에서 약관 동의 여부 확인
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get()
+            .timeout(_firebaseRequestTimeout);
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      final data = userDoc.data();
-      if (data == null || data['termsAccepted'] != true) {
-        // 약관 미동의 시 동의 화면으로 이동
-        final agreed = await Navigator.of(context).push<bool>(
-          MaterialPageRoute(builder: (_) => TermsAgreementScreen(user: user)),
-        );
-        if (agreed != true && mounted) {
-          // 동의 안 하고 이탈 시 로그아웃 처리
-          await FirebaseAuth.instance.signOut();
-          _showMessage('약관에 동의해야 서비스 이용이 가능합니다.');
-          return;
+        final data = userDoc.data();
+        if (data == null || data['termsAccepted'] != true) {
+          // 약관 미동의 시 동의 화면으로 이동
+          final agreed = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(builder: (_) => TermsAgreementScreen(user: user)),
+          );
+          if (agreed != true && mounted) {
+            // 동의 안 하고 이탈 시 로그아웃 처리
+            await FirebaseAuth.instance.signOut();
+            _showMessage('약관에 동의해야 서비스 이용이 가능합니다.');
+            return;
+          }
         }
       }
-    }
 
-    if (!mounted) return;
-    _showMessage('구글 로그인되었습니다.');
-    Navigator.of(context).pop();
-  } on FirebaseAuthException catch (e) {
-    _showMessage(_firebaseMessage(e));
-  } catch (e) {
-    _showMessage('구글 로그인에 실패했습니다.');
-  } finally {
-    if (mounted) setState(() => _isGoogleSubmitting = false);
+      if (!mounted) return;
+      _showMessage('구글 로그인되었습니다.');
+      Navigator.of(context).pop();
+    } on FirebaseAuthException catch (e) {
+      _showMessage(_firebaseMessage(e));
+    } catch (e) {
+      _showMessage('구글 로그인에 실패했습니다.');
+    } finally {
+      if (mounted) setState(() => _isGoogleSubmitting = false);
+    }
   }
-}
 
   @override
   void dispose() {
@@ -4649,54 +4708,70 @@ Future<void> _signInWithGoogle() async {
               ),
             ),
             const SizedBox(height: 16),
-const Row(
-  children: [
-    Expanded(child: Divider()),
-    Padding(
-      padding: EdgeInsets.symmetric(horizontal: 12),
-      child: Text('또는', style: TextStyle(color: _muted, fontSize: 13)),
-    ),
-    Expanded(child: Divider()),
-  ],
-),
-const SizedBox(height: 16),
-OutlinedButton.icon(
-  onPressed: _isGoogleSubmitting ? null : _signInWithGoogle,
-  style: OutlinedButton.styleFrom(
-    padding: const EdgeInsets.symmetric(vertical: 14),
-    side: const BorderSide(color: Color(0xFFDDDDDD)),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-  ),
-  icon: _isGoogleSubmitting
-      ? const SizedBox(
-          width: 18, height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        )
-      : SvgPicture.asset(
-          'assets/images/google.svg',
-          width: 20, height: 20,
-        ),
-  label: const Text('Google로 계속하기', style: TextStyle(color: _ink)),
-),
-const SizedBox(height: 8),
-ElevatedButton.icon(
-  onPressed: _isKakaoSubmitting ? null : _signInWithKakao,
-  style: ElevatedButton.styleFrom(
-    backgroundColor: const Color(0xFFFEE500),
-    foregroundColor: Colors.black,
-    padding: const EdgeInsets.symmetric(vertical: 14),
-    elevation: 0,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-    side: BorderSide.none,
-  ),
-  icon: _isKakaoSubmitting
-      ? const SizedBox(
-          width: 18, height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-        )
-      : const Icon(Icons.chat, size: 20),
-  label: const Text('카카오로 시작하기', style: TextStyle(fontWeight: FontWeight.bold)),
-),
+            const Row(
+              children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    '또는',
+                    style: TextStyle(color: _muted, fontSize: 13),
+                  ),
+                ),
+                Expanded(child: Divider()),
+              ],
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _isGoogleSubmitting ? null : _signInWithGoogle,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: const BorderSide(color: Color(0xFFDDDDDD)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              icon: _isGoogleSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : SvgPicture.asset(
+                      'assets/images/google.svg',
+                      width: 20,
+                      height: 20,
+                    ),
+              label: const Text('Google로 계속하기', style: TextStyle(color: _ink)),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _isKakaoSubmitting ? null : _signInWithKakao,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFEE500),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                side: BorderSide.none,
+              ),
+              icon: _isKakaoSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.black,
+                      ),
+                    )
+                  : const Icon(Icons.chat, size: 20),
+              label: const Text(
+                '카카오로 시작하기',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
           ],
         ),
       ),
@@ -4731,9 +4806,7 @@ void _showContactSupport(BuildContext context) {
               title: const Text('카카오톡 문의'),
               subtitle: const Text('오픈채팅으로 문의하기'),
               onTap: () async {
-                final uri = Uri.parse(
-                  'https://open.kakao.com/o/sftQLozi',
-                );
+                final uri = Uri.parse('https://open.kakao.com/o/sftQLozi');
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 }
@@ -4746,7 +4819,9 @@ void _showContactSupport(BuildContext context) {
               title: const Text('라인 문의'),
               subtitle: const Text('라인으로 문의하기'),
               onTap: () async {
-                final uri = Uri.parse('https://line.me/ti/g2/-CCiaKCx87hclDxnFulTVvqLKshaAOdn0NtXnQ?utm_source=invitation&utm_medium=link_copy&utm_campaign=default');
+                final uri = Uri.parse(
+                  'https://line.me/ti/g2/-CCiaKCx87hclDxnFulTVvqLKshaAOdn0NtXnQ?utm_source=invitation&utm_medium=link_copy&utm_campaign=default',
+                );
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 }
@@ -5840,8 +5915,10 @@ class _ChatRoomTile extends StatelessWidget {
                     imageUrl,
                     fit: BoxFit.cover,
                     webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-                    errorBuilder: (_, _, _) =>
-                        const Icon(Icons.chat_bubble_outline, color: brandMuted),
+                    errorBuilder: (_, _, _) => const Icon(
+                      Icons.chat_bubble_outline,
+                      color: brandMuted,
+                    ),
                   ),
                 ),
         ),
@@ -6031,7 +6108,7 @@ class _MyPageListingTile extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          '${listing.price} · ${listing.place}',
+          '${formatPrice(listing.price)} · ${listing.place}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
@@ -6881,15 +6958,18 @@ class _TermsAgreementScreenState extends State<TermsAgreementScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set({
-        'termsAccepted': true,
-        'privacyAccepted': true,
-        'noticeAccepted': true,
-        'marketingAccepted': _agreeMarketing,
-        'acceptedAt': FieldValue.serverTimestamp(),
-        'termsVersion': '1.0',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.user.uid)
+          .set({
+            'termsAccepted': true,
+            'privacyAccepted': true,
+            'noticeAccepted': true,
+            'marketingAccepted': _agreeMarketing,
+            'acceptedAt': FieldValue.serverTimestamp(),
+            'termsVersion': '1.0',
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
 
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -6908,7 +6988,11 @@ class _TermsAgreementScreenState extends State<TermsAgreementScreen> {
         children: [
           const Text(
             '서비스 이용을 위해\n약관에 동의해주세요.',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: brandPrimary),
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: brandPrimary,
+            ),
           ),
           const SizedBox(height: 32),
           Container(
@@ -6919,12 +7003,19 @@ class _TermsAgreementScreenState extends State<TermsAgreementScreen> {
             child: Column(
               children: [
                 CheckboxListTile(
-                  title: const Text('전체 동의', style: TextStyle(fontWeight: FontWeight.w600)),
+                  title: const Text(
+                    '전체 동의',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   value: _isAllAgreed,
                   onChanged: _toggleAll,
                   activeColor: brandPrimary,
                   controlAffinity: ListTileControlAffinity.leading,
-                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                  ),
                 ),
                 const Divider(height: 1, color: brandBorder),
                 _TermsAccordion(
@@ -6949,7 +7040,8 @@ class _TermsAgreementScreenState extends State<TermsAgreementScreen> {
                   title: '[선택] 마케팅 정보 수신 동의',
                   content: _marketingConsentText,
                   value: _agreeMarketing,
-                  onChanged: (v) => setState(() => _agreeMarketing = v ?? false),
+                  onChanged: (v) =>
+                      setState(() => _agreeMarketing = v ?? false),
                 ),
               ],
             ),
@@ -6958,7 +7050,14 @@ class _TermsAgreementScreenState extends State<TermsAgreementScreen> {
           FilledButton(
             onPressed: _allRequiredAgreed && !_isSubmitting ? _submit : null,
             child: _isSubmitting
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
                 : const Text('동의 완료'),
           ),
         ],

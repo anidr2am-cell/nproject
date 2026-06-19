@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
+import '../utils/price_formatter.dart';
 
 class InputLabel extends StatelessWidget {
   const InputLabel(this.text, {super.key});
@@ -145,7 +146,7 @@ class TradeLocationText extends StatelessWidget {
           Text(label, style: const TextStyle(color: muted)),
           const SizedBox(height: 5),
           Text(
-            value,
+            isPrice ? formatPrice(value) : value,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w900,
@@ -182,4 +183,3 @@ class TypePill extends StatelessWidget {
     );
   }
 }
-
