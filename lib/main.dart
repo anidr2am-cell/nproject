@@ -20,6 +20,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'constants/colors.dart';
 import 'screens/real_estate_screen.dart';
+import 'screens/chat_list_screen.dart';
 import 'utils/price_formatter.dart';
 import 'package:kakao_flutter_sdk_common/kakao_flutter_sdk_common.dart';
 
@@ -566,6 +567,18 @@ class _AppShellState extends State<AppShell> {
               onTypeSelected: _handleTypeSelected,
             ),
             PostListingScreen(onSubmitSuccess: _moveToHomeTab),
+            ChatListScreen(
+              onOpenRoom: (context, room) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ChatRoomScreen(
+                      roomId: room.id,
+                      otherUserName: room.otherUserName,
+                    ),
+                  ),
+                );
+              },
+            ),
             const MyPageScreen(),
           ],
         ),
@@ -607,6 +620,12 @@ class _AppShellState extends State<AppShell> {
                   ),
                   _buildNavTab(
                     index: 3,
+                    icon: Icons.chat_bubble_outline,
+                    selectedIcon: Icons.chat_bubble,
+                    label: '채팅',
+                  ),
+                  _buildNavTab(
+                    index: 4,
                     icon: Icons.person_outline,
                     selectedIcon: Icons.person,
                     label: '나의 정보',
