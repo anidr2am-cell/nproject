@@ -56,7 +56,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     return Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton(
-                        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen())),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const LoginScreen(),
+                          ),
+                        ),
                         style: TextButton.styleFrom(
                           foregroundColor: ink,
                           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -123,30 +127,62 @@ class _HomeScreenState extends State<HomeScreen> {
                     onWrite: widget.onWrite,
                   ),
                   const SizedBox(height: 18),
-                  SizedBox(
-                    height: 42,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      itemBuilder: (context, index) {
-                        final category = categories[index];
-                        final isAll = index == 0;
-                        return FilterChip(
-                          avatar: isAll ? const Icon(Icons.grid_view, size: 18) : null,
-                          selected:
-                              isAll ? _selectedCategory == null : _selectedCategory == category,
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: List.generate(categories.length, (index) {
+                      final category = categories[index];
+                      final isAll = index == 0;
+                      final isSelected = isAll
+                          ? _selectedCategory == null
+                          : _selectedCategory == category;
+                      return ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 150),
+                        child: FilterChip(
+                          selected: isSelected,
                           showCheckmark: false,
-                          label: Text(category),
+                          selectedColor: brandPrimary,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          labelPadding: EdgeInsets.zero,
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              if (isAll) ...[
+                                Icon(
+                                  Icons.grid_view,
+                                  size: 18,
+                                  color: isSelected ? Colors.white : brandInk,
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  category,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: isSelected ? Colors.white : null,
+                                    height: 1.1,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                           onSelected: (_) {
                             setState(() {
                               _selectedCategory = isAll ? null : category;
                             });
                           },
-                        );
-                      },
-                      separatorBuilder: (_, _) => const SizedBox(width: 8),
-                      itemCount: categories.length,
-                    ),
+                        ),
+                      );
+                    }),
                   ),
                   const SizedBox(height: 10),
                   Row(
@@ -173,7 +209,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 : null,
             builder: (context, snapshot) {
               final firestoreListings = snapshot.hasData
-                  ? snapshot.data!.docs.map((doc) => listingFromDoc(doc)).toList()
+                  ? snapshot.data!.docs
+                        .map((doc) => listingFromDoc(doc))
+                        .toList()
                   : <MarketListing>[];
               final allListings = firestoreListings;
               var listings = _showOnlyActive
@@ -191,9 +229,11 @@ class _HomeScreenState extends State<HomeScreen> {
               }
               if (_searchQuery.trim().isNotEmpty) {
                 listings = listings
-                    .where((l) => l.title
-                        .toLowerCase()
-                        .contains(_searchQuery.trim().toLowerCase()))
+                    .where(
+                      (l) => l.title.toLowerCase().contains(
+                        _searchQuery.trim().toLowerCase(),
+                      ),
+                    )
                     .toList();
               }
 
@@ -391,7 +431,9 @@ class NotificationIconButton extends StatelessWidget {
         if (user == null || firebaseUnavailableMessage() != null) {
           return IconButton(
             tooltip: '알림',
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen())),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const LoginScreen())),
             icon: const Icon(Icons.notifications_none),
           );
         }

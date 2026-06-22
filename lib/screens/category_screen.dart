@@ -15,9 +15,9 @@ class CategoryScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
-          mainAxisSpacing: 20,
+          mainAxisSpacing: 24,
           crossAxisSpacing: 20,
-          childAspectRatio: 0.8,
+          childAspectRatio: 0.75,
         ),
         itemCount: categories.length,
         itemBuilder: (context, index) {
@@ -30,7 +30,7 @@ class CategoryScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: surface,
                     borderRadius: BorderRadius.circular(16),
@@ -41,13 +41,19 @@ class CategoryScreen extends StatelessWidget {
                     color: ink,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  category,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    category,
+                    textAlign: TextAlign.center,
+                    softWrap: false,
+                    overflow: TextOverflow.visible,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                    ),
                   ),
                 ),
               ],

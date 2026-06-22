@@ -10,6 +10,19 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function adminEmail() {
+      return signedIn() && request.auth.token.email != null
+        ? request.auth.token.email
+        : "";
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/admins/$(adminEmail()))
+      );
+    }
+
     function listingOwner() {
       return signedIn() && resource.data.sellerUid == request.auth.uid;
     }
@@ -30,17 +43,38 @@ service cloud.firestore {
     match /listings/{listingId} {
       allow read: if true;
       allow create: if listingCreator();
-      allow update, delete: if listingOwner();
+      allow update, delete: if listingOwner() || isAdmin();
     }
 
     match /realEstate/{listingId} {
       allow read: if true;
       allow create: if listingCreator();
-      allow update, delete: if listingOwner();
+      allow update, delete: if listingOwner() || isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow get: if signedIn() && (
+        adminId == request.auth.uid ||
+        adminId == adminEmail()
+      );
+      allow list: if false;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /locations/{locationId} {
+      allow read, create, update, delete: if isAdmin();
     }
 
     match /users/{userId} {
-      allow create, read, update, delete: if owns(userId);
+      allow create, read, update, delete: if owns(userId) || isAdmin();
 
       match /favorites/{listingId} {
         allow read, create, update, delete: if owns(userId);
@@ -76,7 +110,7 @@ service cloud.firestore {
     match /reports/{reportId} {
       allow create: if signedIn() &&
         request.resource.data.reporterUid == request.auth.uid;
-      allow read, update, delete: if false;
+      allow read, update, delete: if isAdmin();
     }
 
     match /notices/{noticeId} {

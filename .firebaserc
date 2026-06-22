@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "nproject-302c9"
-  }
+  },
+  "targets": {
+    "nproject-302c9": {
+      "hosting": {
+        "admin": [
+          "82saja-admin"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

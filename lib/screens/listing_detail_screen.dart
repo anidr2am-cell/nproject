@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../constants/colors.dart';
@@ -11,6 +12,7 @@ import '../utils/price_formatter.dart';
 import '../widgets/common_widgets.dart';
 import 'chat_room_screen.dart';
 import 'login_screen.dart';
+import 'post_listing_screen.dart';
 
 class ListingDetailScreen extends StatefulWidget {
   const ListingDetailScreen({required this.listing, super.key});

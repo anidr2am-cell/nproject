@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:js' as js;
-import 'dart:js_util' as js_util;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
-import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao_sdk;
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart'
+    as kakao_sdk;
 import '../constants/colors.dart';
 import 'auth_screen.dart';
 
@@ -44,11 +44,13 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       if (kIsWeb) {
         print('[KAKAO] initiating redirect login (web)');
-        js.context.callMethod('eval', ['''
+        js.context.callMethod('eval', [
+          '''
           Kakao.Auth.authorize({
             redirectUri: 'https://82saja.com/kakao-callback'
           });
-        ''']);
+        ''',
+        ]);
         return;
       }
 
@@ -69,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
       print('[KAKAO] authorization success');
       final kakaoId = user.id.toString();
       final nickname = user.kakaoAccount?.profile?.nickname ?? '카카오 사용자';
-      
+
       final email = '$kakaoId@kakao.com';
       final password = 'kakao_$kakaoId';
 
@@ -77,16 +79,14 @@ class _LoginScreenState extends State<LoginScreen> {
       print('[KAKAO] starting firebase login');
       UserCredential userCredential;
       try {
-        userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: email,
-          password: password,
-        ).timeout(_firebaseRequestTimeout);
+        userCredential = await FirebaseAuth.instance
+            .signInWithEmailAndPassword(email: email, password: password)
+            .timeout(_firebaseRequestTimeout);
       } on FirebaseAuthException catch (e) {
         if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
-          userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-            email: email,
-            password: password,
-          ).timeout(_firebaseRequestTimeout);
+          userCredential = await FirebaseAuth.instance
+              .createUserWithEmailAndPassword(email: email, password: password)
+              .timeout(_firebaseRequestTimeout);
           await userCredential.user?.updateDisplayName(nickname);
         } else {
           rethrow;
@@ -110,16 +110,19 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     if (kIsWeb) {
-      FirebaseAuth.instance.getRedirectResult().then((result) {
-        if (result.user != null && mounted) {
-          _showMessage('구글 로그인되었습니다.');
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          }
-        }
-      }).catchError((e) {
-        debugPrint('[LoginScreen] Redirect result error: $e');
-      });
+      FirebaseAuth.instance
+          .getRedirectResult()
+          .then((result) {
+            if (result.user != null && mounted) {
+              _showMessage('구글 로그인되었습니다.');
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            }
+          })
+          .catchError((e) {
+            debugPrint('[LoginScreen] Redirect result error: $e');
+          });
     }
   }
 
@@ -309,7 +312,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Expanded(child: Divider(color: brandBorder)),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('또는', style: TextStyle(color: brandMuted, fontSize: 13)),
+                  child: Text(
+                    '또는',
+                    style: TextStyle(color: brandMuted, fontSize: 13),
+                  ),
                 ),
                 const Expanded(child: Divider(color: brandBorder)),
               ],
@@ -320,7 +326,9 @@ class _LoginScreenState extends State<LoginScreen> {
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 side: const BorderSide(color: brandBorder),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               icon: _isGoogleSubmitting
                   ? const SizedBox(
@@ -333,7 +341,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: 20,
                       height: 20,
                     ),
-              label: const Text('Google로 계속하기', style: TextStyle(color: brandInk)),
+              label: const Text(
+                'Google로 계속하기',
+                style: TextStyle(color: brandInk),
+              ),
             ),
             const SizedBox(height: 10),
             ElevatedButton.icon(
@@ -343,16 +354,25 @@ class _LoginScreenState extends State<LoginScreen> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 side: BorderSide.none,
               ),
               icon: _isKakaoSubmitting
                   ? const SizedBox(
-                      width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.black,
+                      ),
                     )
                   : const Icon(Icons.chat, size: 20),
-              label: const Text('카카오로 시작하기', style: TextStyle(fontWeight: FontWeight.bold)),
+              label: const Text(
+                '카카오로 시작하기',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
