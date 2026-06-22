@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:html' as html;
 
 import 'package:flutter/foundation.dart';
@@ -23,11 +23,21 @@ import 'screens/real_estate_screen.dart';
 import 'screens/chat_list_screen.dart';
 import 'utils/price_formatter.dart';
 import 'package:kakao_flutter_sdk_common/kakao_flutter_sdk_common.dart';
+import 'admin/admin_app.dart';
 
 const _firebaseRequestTimeout = Duration(seconds: 15);
 bool _firebaseReady = false;
 String? _firebaseInitMessage;
 
+bool _shouldRunAdminApp() {
+  if (!kIsWeb) return false;
+  final host = (html.window.location.hostname ?? '').toLowerCase();
+  final query = (html.window.location.search ?? '').toLowerCase();
+  return host == 'admin.82saja.com' ||
+      host == '82saja-admin.web.app' ||
+      host == '82saja-admin.firebaseapp.com' ||
+      query.contains('admin=1');
+  }
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -125,7 +135,8 @@ Future<void> main() async {
     debugPrintStack(stackTrace: stackTrace);
   }
 
-  runApp(const NprojectApp());
+  runApp(_shouldRunAdminApp() ? const AdminApp() : const NprojectApp());
+  
 }
 
 String? _firebaseUnavailableMessage() {
