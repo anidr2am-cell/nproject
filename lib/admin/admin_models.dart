@@ -21,23 +21,29 @@ class AdminProductDraft {
   final String status;
   final String source;
 
-  Map<String, Object?> toMap(List<String> imageUrls) {
-    return {
-      'title': title,
-      'price': price,
-      'category': category,
-      'description': description,
-      'location': location,
-      'condition': condition,
-      'images': imageUrls,
-      'sellerId': '${location}사랑',
-      'sellerNickname': '${location}사랑',
-      'status': status,
-      'source': source,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-  }
+Map<String, Object?> toMap(List<String> imageUrls) {
+  final sellerName = '${location}사랑';
+  return {
+    'title': title,
+    'price': price,
+    'category': category,
+    'description': description,
+    'location': location,
+    'place': location,
+    'condition': condition,
+    'photoUrls': imageUrls,
+    'sellerId': sellerName,
+    'sellerUid': sellerName,
+    'sellerNickname': sellerName,
+    'sellerName': sellerName,
+    'tradeCount': 0,
+    'status': status,
+    'source': source,
+    'type': 'used',
+    'createdAt': FieldValue.serverTimestamp(),
+    'updatedAt': FieldValue.serverTimestamp(),
+  };
+}
 }
 
 class AdminProduct {

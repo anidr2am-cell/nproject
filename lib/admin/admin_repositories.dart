@@ -52,7 +52,7 @@ class AdminProductRepository {
   final FirebaseStorage _storage;
 
   CollectionReference<Map<String, dynamic>> get _products =>
-      _firestore.collection('products');
+      _firestore.collection('listings');
 
   Stream<List<AdminProduct>> watchProducts() {
     return _products
