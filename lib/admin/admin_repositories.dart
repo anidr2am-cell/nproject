@@ -103,6 +103,53 @@ class AdminProductRepository {
   Future<void> deleteProduct(String productId) {
     return _products.doc(productId).delete();
   }
+  Stream<List<Map<String, dynamic>>> watchAdminChatRooms() {
+    return _firestore
+        .collection('chatRooms')
+        .where('isAdminProduct', isEqualTo: true)
+        .orderBy('lastMessageAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList());
+  }
+
+  Stream<List<Map<String, dynamic>>> watchMessages(String roomId) {
+    return _firestore
+        .collection('chatRooms')
+        .doc(roomId)
+        .collection('messages')
+        .orderBy('createdAt')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList());
+  }
+
+  Future<void> sendAdminMessage({
+    required String roomId,
+    required String sellerName,
+    required String text,
+  }) async {
+    final batch = _firestore.batch();
+    final msgRef = _firestore
+        .collection('chatRooms')
+        .doc(roomId)
+        .collection('messages')
+        .doc();
+    batch.set(msgRef, {
+      'text': text,
+      'senderUid': sellerName,
+      'senderNickname': sellerName,
+      'createdAt': FieldValue.serverTimestamp(),
+      'isAdmin': true,
+    });
+    batch.update(_firestore.collection('chatRooms').doc(roomId), {
+      'lastMessage': text,
+      'lastMessageAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+  }
 
   Future<List<String>> _uploadImages(
     String productId,

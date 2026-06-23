@@ -1035,7 +1035,170 @@ String _validOrFirst(String? value, List<String> values) {
   if (value != null && values.contains(value)) return value;
   return values.first;
 }
+class AdminChatScreen extends StatefulWidget {
+  const AdminChatScreen({super.key});
 
+  @override
+  State<AdminChatScreen> createState() => _AdminChatScreenState();
+}
+
+class _AdminChatScreenState extends State<AdminChatScreen> {
+  final _repo = AdminProductRepository();
+  String? _selectedRoomId;
+  String? _selectedSellerName;
+  final _msgController = TextEditingController();
+
+  @override
+  void dispose() {
+    _msgController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminPage(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 320,
+            child: _Panel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SectionTitle('채팅 문의'),
+                  const SizedBox(height: 12),
+                  StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _repo.watchAdminChatRooms(),
+                    builder: (context, snapshot) {
+                      final rooms = snapshot.data ?? [];
+                      if (rooms.isEmpty) {
+                        return const Text('문의 채팅이 없습니다.',
+                            style: TextStyle(color: adminMuted));
+                      }
+                      return Column(
+                        children: rooms.map((room) {
+                          final isSelected = _selectedRoomId == room['id'];
+                          return ListTile(
+                            selected: isSelected,
+                            selectedTileColor: adminSurface,
+                            title: Text(room['productTitle'] ?? '상품'),
+                            subtitle: Text(room['lastMessage'] ?? ''),
+                            onTap: () => setState(() {
+                              _selectedRoomId = room['id'];
+                              _selectedSellerName = room['sellerNickname'];
+                            }),
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: _selectedRoomId == null
+                ? const _Panel(child: Center(child: Text('채팅방을 선택하세요.')))
+                : _Panel(
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: 480,
+                          child: StreamBuilder<List<Map<String, dynamic>>>(
+                            stream: _repo.watchMessages(_selectedRoomId!),
+                            builder: (context, snapshot) {
+                              final messages = snapshot.data ?? [];
+                              return ListView.builder(
+                                itemCount: messages.length,
+                                itemBuilder: (context, i) {
+                                  final msg = messages[i];
+                                  final isAdmin = msg['isAdmin'] == true;
+                                  return Align(
+                                    alignment: isAdmin
+                                        ? Alignment.centerRight
+                                        : Alignment.centerLeft,
+                                    child: Container(
+                                      margin: const EdgeInsets.symmetric(
+                                          vertical: 4, horizontal: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 8, horizontal: 12),
+                                      decoration: BoxDecoration(
+                                        color: isAdmin
+                                            ? const Color(0xFF1C2B3A)
+                                            : adminSurface,
+                                        borderRadius:
+                                            BorderRadius.circular(12),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: isAdmin
+                                            ? CrossAxisAlignment.end
+                                            : CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            msg['senderNickname'] ?? '',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isAdmin
+                                                  ? Colors.white70
+                                                  : adminMuted,
+                                            ),
+                                          ),
+                                          Text(
+                                            msg['text'] ?? '',
+                                            style: TextStyle(
+                                              color: isAdmin
+                                                  ? Colors.white
+                                                  : adminInk,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                        const Divider(),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _msgController,
+                                decoration: const InputDecoration(
+                                  hintText: '답변 입력...',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton(
+                              onPressed: () async {
+                                final text = _msgController.text.trim();
+                                if (text.isEmpty) return;
+                                await _repo.sendAdminMessage(
+                                  roomId: _selectedRoomId!,
+                                  sellerName:
+                                      _selectedSellerName ?? '관리자',
+                                  text: text,
+                                );
+                                _msgController.clear();
+                              },
+                              child: const Text('발송'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 String _contentTypeForName(String name) {
   final lower = name.toLowerCase();
   if (lower.endsWith('.png')) return 'image/png';
