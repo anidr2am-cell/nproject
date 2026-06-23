@@ -1,0 +1,1250 @@
+﻿import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+
+import 'admin_app.dart';
+import 'admin_models.dart';
+import 'admin_repositories.dart';
+
+const adminCategorySeeds = ['?대???, '而댄벂??, '媛??, '媛援?, '?앺솢?⑺뭹', '?섎쪟', '李⑤웾', '湲고?'];
+const adminLocationSeeds = ['諛⑹퐬', '?뚰???, '?쒕씪李?, '?몄폆', '移섏븰留덉씠', '?쇱슜', '諛⑹꽱'];
+const adminStatuses = ['active', 'reserved', 'sold', 'hidden'];
+
+class AdminPage extends StatelessWidget {
+  const AdminPage({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1180),
+            child: child,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class AdminDashboardScreen extends StatelessWidget {
+  const AdminDashboardScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final dashboardRepository = AdminDashboardRepository();
+    final productRepository = AdminProductRepository();
+    return AdminPage(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FutureBuilder<AdminDashboardStats>(
+            future: dashboardRepository.loadStats(),
+            builder: (context, snapshot) {
+              final stats = snapshot.data;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _StatCard(label: '?꾩껜 ?뚯썝 ??, value: stats?.userCount),
+                  _StatCard(label: '?꾩껜 ?곹뭹 ??, value: stats?.productCount),
+                  _StatCard(
+                    label: '?ㅻ뒛 ?깅줉 ?곹뭹 ??,
+                    value: stats?.todayProductCount,
+                  ),
+                  _StatCard(
+                    label: '?먮ℓ以??곹뭹 ??,
+                    value: stats?.activeProductCount,
+                  ),
+                  _StatCard(label: '?좉퀬 嫄댁닔', value: stats?.reportCount),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+          const _SectionTitle('理쒓렐 ?깅줉 ?곹뭹'),
+          const SizedBox(height: 10),
+          StreamBuilder<List<AdminProduct>>(
+            stream: productRepository.watchRecentProducts(),
+            builder: (context, snapshot) {
+              final products = snapshot.data ?? const <AdminProduct>[];
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const _Panel(
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (products.isEmpty) {
+                return const _Panel(child: Text('?깅줉???곹뭹???놁뒿?덈떎.'));
+              }
+              return _Panel(
+                child: _ProductTable(products: products, compact: true),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminProductListScreen extends StatefulWidget {
+  const AdminProductListScreen({super.key});
+
+  @override
+  State<AdminProductListScreen> createState() => _AdminProductListScreenState();
+}
+
+class _AdminProductListScreenState extends State<AdminProductListScreen> {
+  final _searchController = TextEditingController();
+  String _statusFilter = 'all';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final repository = AdminProductRepository();
+    return AdminPage(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 320,
+                child: TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    hintText: '?곹뭹紐? 移댄뀒怨좊━, 吏??寃??,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'all', label: Text('?꾩껜')),
+                  ButtonSegment(value: 'active', label: Text('?먮ℓ以?)),
+                  ButtonSegment(value: 'reserved', label: Text('?덉빟以?)),
+                  ButtonSegment(value: 'sold', label: Text('?먮ℓ?꾨즺')),
+                  ButtonSegment(value: 'hidden', label: Text('?④?')),
+                ],
+                selected: {_statusFilter},
+                onSelectionChanged: (value) =>
+                    setState(() => _statusFilter = value.first),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          StreamBuilder<List<AdminProduct>>(
+            stream: repository.watchProducts(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const _Panel(
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final keyword = _searchController.text.trim().toLowerCase();
+              final products = (snapshot.data ?? const <AdminProduct>[]).where((
+                product,
+              ) {
+                final matchesStatus =
+                    _statusFilter == 'all' || product.status == _statusFilter;
+                final target =
+                    '${product.title} ${product.category} ${product.location}'
+                        .toLowerCase();
+                final matchesKeyword =
+                    keyword.isEmpty || target.contains(keyword);
+                return matchesStatus && matchesKeyword;
+              }).toList();
+              return _Panel(
+                child: _ProductTable(
+                  products: products,
+                  onStatusChanged: repository.updateProductStatus,
+                  onDelete: (id) async {
+                    final confirmed = await _confirm(context, '?곹뭹????젣?좉퉴??');
+                    if (confirmed) await repository.deleteProduct(id);
+                  },
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminProductFormScreen extends StatelessWidget {
+  const AdminProductFormScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AdminPage(child: _ProductEditor(source: 'manual'));
+  }
+}
+
+class AdminAiProductScreen extends StatefulWidget {
+  const AdminAiProductScreen({super.key});
+
+  @override
+  State<AdminAiProductScreen> createState() => _AdminAiProductScreenState();
+}
+
+class _AdminAiProductScreenState extends State<AdminAiProductScreen> {
+  final _rawController = TextEditingController();
+  AdminProductDraft? _draft;
+
+  @override
+  void dispose() {
+    _rawController.dispose();
+    super.dispose();
+  }
+
+  void _analyze() {
+    setState(() => _draft = parseMarketplaceText(_rawController.text));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminPage(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionTitle('AI ?곹뭹 ?깅줉'),
+          const SizedBox(height: 6),
+          const Text(
+            '?꾩옱??Mock 遺꾩꽍 ?⑥닔濡??숈옉?⑸땲?? ?ν썑 OpenAI API ?몄텧遺濡?援먯껜?????덉뒿?덈떎.',
+            style: TextStyle(color: adminMuted),
+          ),
+          const SizedBox(height: 16),
+          _Panel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _rawController,
+                  minLines: 8,
+                  maxLines: 12,
+                  decoration: const InputDecoration(
+                    labelText: '?먮Ц ?낅젰',
+                    alignLabelWithHint: true,
+                    hintText: '錫귖림錫?iPhone 15 Pro Max\n256GB\n29000 錫싟림錫?n錫む툩錫꿋툧錫붲링',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: _analyze,
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text('AI 遺꾩꽍'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_draft != null) ...[
+            const SizedBox(height: 18),
+            const _SectionTitle('寃곌낵 誘몃━蹂닿린'),
+            const SizedBox(height: 10),
+            _ProductEditor(
+              initialDraft: _draft!,
+              source: 'facebook_marketplace',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductEditor extends StatefulWidget {
+  const _ProductEditor({this.initialDraft, required this.source});
+
+  final AdminProductDraft? initialDraft;
+  final String source;
+
+  @override
+  State<_ProductEditor> createState() => _ProductEditorState();
+}
+
+class _ProductEditorState extends State<_ProductEditor> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _titleController;
+  late final TextEditingController _priceController;
+  late final TextEditingController _descriptionController;
+  String _category = adminCategorySeeds.first;
+  String _location = adminLocationSeeds.first;
+  final _locationController = TextEditingController();
+  bool _isCustomLocation = false;
+  String _status = 'active';
+  String _condition = '以묎퀬';
+  final _images = <AdminUploadFile>[];
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final draft = widget.initialDraft;
+    _titleController = TextEditingController(text: draft?.title ?? '');
+    _priceController = TextEditingController(
+      text: draft?.price == null ? '' : '${draft!.price}',
+    );
+    _descriptionController = TextEditingController(
+      text: draft?.description ?? '',
+    );
+    _category = _validOrFirst(draft?.category, adminCategorySeeds);
+    _location = _validOrFirst(draft?.location, adminLocationSeeds);
+    _locationController.text = _location;
+    _status = _validOrFirst(draft?.status, adminStatuses);
+    _condition = draft?.condition ?? '以묎퀬';
+  }
+
+  @override
+  void dispose() {
+    _locationController.dispose();
+    _titleController.dispose();
+    _priceController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImages() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      allowMultiple: true,
+      withData: true,
+    );
+    if (result == null) return;
+    setState(() {
+      _images
+        ..clear()
+        ..addAll(
+          result.files
+              .where((file) => file.bytes != null)
+              .map(
+                (file) => AdminUploadFile(
+                  name: file.name,
+                  bytes: file.bytes!,
+                  contentType: _contentTypeForName(file.name),
+                ),
+              ),
+        );
+    });
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate() || _isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      final draft = AdminProductDraft(
+        title: _titleController.text.trim(),
+        price: int.parse(
+          _priceController.text.replaceAll(RegExp(r'[^0-9]'), ''),
+        ),
+        category: _category,
+        description: _descriptionController.text.trim(),
+        location: _location,
+        condition: _condition,
+        status: _status,
+        source: widget.source,
+      );
+      await AdminProductRepository().createProduct(draft, _images);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('?곹뭹???깅줉?섏뿀?듬땲??')));
+      _formKey.currentState!.reset();
+      _titleController.clear();
+      _priceController.clear();
+      _descriptionController.clear();
+      setState(() => _images.clear());
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('?곹뭹 ?깅줉???ㅽ뙣?덉뒿?덈떎. $error')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _FieldBox(
+                  child: TextFormField(
+                    controller: _titleController,
+                    decoration: const InputDecoration(labelText: '?곹뭹紐?),
+                    validator: _required,
+                  ),
+                ),
+                _FieldBox(
+                  child: TextFormField(
+                    controller: _priceController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '媛寃?),
+                    validator: _priceValidator,
+                  ),
+                ),
+                _FieldBox(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _category,
+                    decoration: const InputDecoration(labelText: '移댄뀒怨좊━'),
+                    items: adminCategorySeeds
+                        .map(
+                          (item) =>
+                              DropdownMenuItem(value: item, child: Text(item)),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _category = value ?? _category),
+                  ),
+                ),
+                _FieldBox(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text('吏??, style: TextStyle(color: adminMuted, fontSize: 13)),
+                          const SizedBox(width: 12),
+                          Switch(
+                            value: _isCustomLocation,
+                            onChanged: (val) => setState(() {
+                              _isCustomLocation = val;
+                              if (!val) _location = adminLocationSeeds.first;
+                            }),
+                          ),
+                          Text(
+                            _isCustomLocation ? '吏곸젒 ?낅젰' : '紐⑸줉 ?좏깮',
+                            style: const TextStyle(fontSize: 13, color: adminMuted),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_isCustomLocation)
+                        TextField(
+                          controller: _locationController,
+                          decoration: const InputDecoration(
+                            labelText: '吏??吏곸젒 ?낅젰',
+                            hintText: '?? 珥뚮?由? ?뚰???以묒떖媛',
+                          ),
+                          onChanged: (val) => _location = val.trim(),
+                        )
+                      else
+                        _DropdownField<String>(
+                          initialValue: _location,
+                          decoration: const InputDecoration(labelText: '吏??),
+                          items: adminLocationSeeds
+                              .map((l) => DropdownMenuItem(value: l, child: Text(l)))
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _location = value ?? _location),
+                        ),
+                    ],
+                  ),
+                ),
+                        .map(
+                          (item) =>
+                              DropdownMenuItem(value: item, child: Text(item)),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _location = value ?? _location),
+                  ),
+                ),
+                _FieldBox(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _status,
+                    decoration: const InputDecoration(labelText: '?곹깭'),
+                    items: adminStatuses
+                        .map(
+                          (item) => DropdownMenuItem(
+                            value: item,
+                            child: Text(adminStatusLabel(item)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _status = value ?? _status),
+                  ),
+                ),
+                _FieldBox(
+                  child: TextFormField(
+                    initialValue: _condition,
+                    decoration: const InputDecoration(labelText: '?곹뭹 ?곹깭'),
+                    onChanged: (value) => _condition = value,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _descriptionController,
+              minLines: 5,
+              maxLines: 8,
+              decoration: const InputDecoration(
+                labelText: '?ㅻ챸',
+                alignLabelWithHint: true,
+              ),
+              validator: _required,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _pickImages,
+                  icon: const Icon(Icons.image_outlined),
+                  label: const Text('?대?吏 ?낅줈??),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${_images.length}媛??좏깮??,
+                  style: const TextStyle(color: adminMuted),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: _isSaving ? null : _save,
+                icon: _isSaving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: const Text('?깅줉'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AdminUsersScreen extends StatelessWidget {
+  const AdminUsersScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final repository = AdminUserRepository();
+    return AdminPage(
+      child: StreamBuilder<List<AdminUserRecord>>(
+        stream: repository.watchUsers(),
+        builder: (context, snapshot) {
+          final users = snapshot.data ?? const <AdminUserRecord>[];
+          return _Panel(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columns: const [
+                  DataColumn(label: Text('?됰꽕??)),
+                  DataColumn(label: Text('?대찓??)),
+                  DataColumn(label: Text('媛?낆씪')),
+                  DataColumn(label: Text('?곹뭹??)),
+                  DataColumn(label: Text('?곹깭')),
+                  DataColumn(label: Text('愿由?)),
+                ],
+                rows: users
+                    .map(
+                      (user) => DataRow(
+                        cells: [
+                          DataCell(Text(user.nickname)),
+                          DataCell(Text(user.email)),
+                          DataCell(Text(adminDateLabel(user.createdAt))),
+                          DataCell(Text('${user.productCount}')),
+                          DataCell(Text(adminStatusLabel(user.status))),
+                          DataCell(
+                            Row(
+                              children: [
+                                TextButton(
+                                  onPressed: () =>
+                                      _showUserDetail(context, user),
+                                  child: const Text('?곸꽭'),
+                                ),
+                                TextButton(
+                                  onPressed: () => repository.updateUserStatus(
+                                    user.id,
+                                    'suspended',
+                                  ),
+                                  child: const Text('?뺤?'),
+                                ),
+                                TextButton(
+                                  onPressed: () => repository.updateUserStatus(
+                                    user.id,
+                                    'active',
+                                  ),
+                                  child: const Text('?쒖꽦??),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class AdminTaxonomyScreen extends StatefulWidget {
+  const AdminTaxonomyScreen.categories({super.key})
+    : collectionName = 'categories',
+      title = '移댄뀒怨좊━ 愿由?,
+      seeds = adminCategorySeeds;
+
+  const AdminTaxonomyScreen.locations({super.key})
+    : collectionName = 'locations',
+      title = '吏??愿由?,
+      seeds = adminLocationSeeds;
+
+  final String collectionName;
+  final String title;
+  final List<String> seeds;
+
+  @override
+  State<AdminTaxonomyScreen> createState() => _AdminTaxonomyScreenState();
+}
+
+class _AdminTaxonomyScreenState extends State<AdminTaxonomyScreen> {
+  late final AdminTaxonomyRepository _repository;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = AdminTaxonomyRepository(widget.collectionName, widget.seeds);
+    _repository.ensureSeedData();
+  }
+
+  Future<void> _openEditor({AdminTaxonomyItem? item}) async {
+    final controller = TextEditingController(text: item?.name ?? '');
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(item == null ? '${widget.title} 異붽?' : '${widget.title} ?섏젙'),
+        content: TextField(controller: controller, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('痍⑥냼'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('???),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.isEmpty) return;
+    if (item == null) {
+      await _repository.addItem(name);
+    } else {
+      await _repository.updateItem(item.id, name);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminPage(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: () => _openEditor(),
+              icon: const Icon(Icons.add),
+              label: const Text('異붽?'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          StreamBuilder<List<AdminTaxonomyItem>>(
+            stream: _repository.watchItems(),
+            builder: (context, snapshot) {
+              final items = snapshot.data ?? const <AdminTaxonomyItem>[];
+              return _Panel(
+                child: Column(
+                  children: items
+                      .map(
+                        (item) => ListTile(
+                          title: Text(item.name),
+                          subtitle: Text(
+                            '?앹꽦??${adminDateLabel(item.createdAt)}',
+                          ),
+                          trailing: Wrap(
+                            spacing: 8,
+                            children: [
+                              IconButton(
+                                tooltip: '?섏젙',
+                                onPressed: () => _openEditor(item: item),
+                                icon: const Icon(Icons.edit_outlined),
+                              ),
+                              IconButton(
+                                tooltip: '??젣',
+                                onPressed: () =>
+                                    _repository.deleteItem(item.id),
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminReportsScreen extends StatelessWidget {
+  const AdminReportsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final repository = AdminReportRepository();
+    return AdminPage(
+      child: StreamBuilder<List<AdminReportRecord>>(
+        stream: repository.watchReports(),
+        builder: (context, snapshot) {
+          final reports = snapshot.data ?? const <AdminReportRecord>[];
+          return _Panel(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columns: const [
+                  DataColumn(label: Text('?좉퀬???)),
+                  DataColumn(label: Text('?좉퀬??)),
+                  DataColumn(label: Text('?좉퀬?ъ쑀')),
+                  DataColumn(label: Text('泥섎━?곹깭')),
+                  DataColumn(label: Text('?좉퀬??)),
+                  DataColumn(label: Text('泥섎━')),
+                ],
+                rows: reports
+                    .map(
+                      (report) => DataRow(
+                        cells: [
+                          DataCell(Text(report.targetId)),
+                          DataCell(Text(report.reporterId)),
+                          DataCell(
+                            SizedBox(width: 260, child: Text(report.reason)),
+                          ),
+                          DataCell(Text(adminStatusLabel(report.status))),
+                          DataCell(Text(adminDateLabel(report.createdAt))),
+                          DataCell(
+                            Wrap(
+                              spacing: 6,
+                              children: [
+                                TextButton(
+                                  onPressed: () => repository
+                                      .updateReportStatus(report.id, 'ignored'),
+                                  child: const Text('臾댁떆'),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      repository.hideProduct(report.targetId),
+                                  child: const Text('?④?'),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      repository.deleteProduct(report.targetId),
+                                  child: const Text('??젣'),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      repository.suspendUser(report.reporterId),
+                                  child: const Text('?뚯썝 ?뺤?'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class AdminSettingsScreen extends StatelessWidget {
+  const AdminSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const AdminPage(
+      child: _Panel(
+        child: SizedBox(
+          height: 220,
+          child: Center(
+            child: Text(
+              '?ъ씠??湲곕낯 ?ㅼ젙? ?ν썑 異붽? ?덉젙?낅땲??',
+              style: TextStyle(color: adminMuted),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductTable extends StatelessWidget {
+  const _ProductTable({
+    required this.products,
+    this.compact = false,
+    this.onStatusChanged,
+    this.onDelete,
+  });
+
+  final List<AdminProduct> products;
+  final bool compact;
+  final Future<void> Function(String id, String status)? onStatusChanged;
+  final Future<void> Function(String id)? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: [
+          const DataColumn(label: Text('?몃꽕??)),
+          const DataColumn(label: Text('?곹뭹紐?)),
+          const DataColumn(label: Text('媛寃?)),
+          const DataColumn(label: Text('移댄뀒怨좊━')),
+          const DataColumn(label: Text('吏??)),
+          const DataColumn(label: Text('?곹깭')),
+          const DataColumn(label: Text('?깅줉??)),
+          if (!compact) const DataColumn(label: Text('愿由?)),
+        ],
+        rows: products
+            .map(
+              (product) => DataRow(
+                cells: [
+                  DataCell(
+                    _Thumb(
+                      url: product.images.isEmpty ? null : product.images.first,
+                    ),
+                  ),
+                  DataCell(SizedBox(width: 260, child: Text(product.title))),
+                  DataCell(Text('${product.price}')),
+                  DataCell(Text(product.category)),
+                  DataCell(Text(product.location)),
+                  DataCell(
+                    onStatusChanged == null
+                        ? Text(adminStatusLabel(product.status))
+                        : DropdownButton<String>(
+                            value: adminStatuses.contains(product.status)
+                                ? product.status
+                                : 'active',
+                            underline: const SizedBox.shrink(),
+                            items: adminStatuses
+                                .map(
+                                  (status) => DropdownMenuItem(
+                                    value: status,
+                                    child: Text(adminStatusLabel(status)),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                onStatusChanged!(product.id, value);
+                              }
+                            },
+                          ),
+                  ),
+                  DataCell(Text(adminDateLabel(product.createdAt))),
+                  if (!compact)
+                    DataCell(
+                      Wrap(
+                        spacing: 6,
+                        children: [
+                          TextButton(onPressed: () {}, child: const Text('?섏젙')),
+                          TextButton(
+                            onPressed: onDelete == null
+                                ? null
+                                : () => onDelete!(product.id),
+                            child: const Text('??젣'),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _Thumb extends StatelessWidget {
+  const _Thumb({this.url});
+
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: adminSurface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: adminBorder),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: url == null
+          ? const Icon(Icons.image_outlined, color: adminMuted)
+          : Image.network(url!, fit: BoxFit.cover),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({required this.label, required this.value});
+
+  final String label;
+  final int? value;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 212,
+      child: _Panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                color: adminMuted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value == null ? '-' : '$value',
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Panel extends StatelessWidget {
+  const _Panel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: adminBorder),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w900,
+        color: adminInk,
+      ),
+    );
+  }
+}
+
+class _FieldBox extends StatelessWidget {
+  const _FieldBox({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(width: 260, child: child);
+  }
+}
+
+void _showUserDetail(BuildContext context, AdminUserRecord user) {
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(user.nickname),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('UID: ${user.id}'),
+          Text('?대찓?? ${user.email}'),
+          Text('媛?낆씪: ${adminDateLabel(user.createdAt)}'),
+          Text('?곹뭹?? ${user.productCount}'),
+          Text('?곹깭: ${adminStatusLabel(user.status)}'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('?リ린'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<bool> _confirm(BuildContext context, String message) async {
+  return await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('痍⑥냼'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('?뺤씤'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+}
+
+String? _required(String? value) {
+  return value?.trim().isEmpty == true ? '?꾩닔 ?낅젰 ??ぉ?낅땲??' : null;
+}
+
+String? _priceValidator(String? value) {
+  final price = int.tryParse(value?.replaceAll(RegExp(r'[^0-9]'), '') ?? '');
+  return price == null || price <= 0 ? '媛寃⑹쓣 ?レ옄濡??낅젰?댁＜?몄슂.' : null;
+}
+
+String _validOrFirst(String? value, List<String> values) {
+  if (value != null && values.contains(value)) return value;
+  return values.first;
+}
+class AdminChatScreen extends StatefulWidget {
+  const AdminChatScreen({super.key});
+
+  @override
+  State<AdminChatScreen> createState() => _AdminChatScreenState();
+}
+
+class _AdminChatScreenState extends State<AdminChatScreen> {
+  final _repo = AdminProductRepository();
+  String? _selectedRoomId;
+  String? _selectedSellerName;
+  final _msgController = TextEditingController();
+
+  @override
+  void dispose() {
+    _msgController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminPage(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 320,
+            child: _Panel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SectionTitle('梨꾪똿 臾몄쓽'),
+                  const SizedBox(height: 12),
+                  StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _repo.watchAdminChatRooms(),
+                    builder: (context, snapshot) {
+                      final rooms = snapshot.data ?? [];
+                      if (rooms.isEmpty) {
+                        return const Text('臾몄쓽 梨꾪똿???놁뒿?덈떎.',
+                            style: TextStyle(color: adminMuted));
+                      }
+                      return Column(
+                        children: rooms.map((room) {
+                          final isSelected = _selectedRoomId == room['id'];
+                          return ListTile(
+                            selected: isSelected,
+                            selectedTileColor: adminSurface,
+                            title: Text(room['productTitle'] ?? '?곹뭹'),
+                            subtitle: Text(room['lastMessage'] ?? ''),
+                            onTap: () => setState(() {
+                              _selectedRoomId = room['id'];
+                              _selectedSellerName = room['sellerNickname'];
+                            }),
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: _selectedRoomId == null
+                ? const _Panel(child: Center(child: Text('梨꾪똿諛⑹쓣 ?좏깮?섏꽭??')))
+                : _Panel(
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: 480,
+                          child: StreamBuilder<List<Map<String, dynamic>>>(
+                            stream: _repo.watchMessages(_selectedRoomId!),
+                            builder: (context, snapshot) {
+                              final messages = snapshot.data ?? [];
+                              return ListView.builder(
+                                itemCount: messages.length,
+                                itemBuilder: (context, i) {
+                                  final msg = messages[i];
+                                  final isAdmin = msg['isAdmin'] == true;
+                                  return Align(
+                                    alignment: isAdmin
+                                        ? Alignment.centerRight
+                                        : Alignment.centerLeft,
+                                    child: Container(
+                                      margin: const EdgeInsets.symmetric(
+                                          vertical: 4, horizontal: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 8, horizontal: 12),
+                                      decoration: BoxDecoration(
+                                        color: isAdmin
+                                            ? const Color(0xFF1C2B3A)
+                                            : adminSurface,
+                                        borderRadius:
+                                            BorderRadius.circular(12),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: isAdmin
+                                            ? CrossAxisAlignment.end
+                                            : CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            msg['senderNickname'] ?? '',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isAdmin
+                                                  ? Colors.white70
+                                                  : adminMuted,
+                                            ),
+                                          ),
+                                          Text(
+                                            msg['text'] ?? '',
+                                            style: TextStyle(
+                                              color: isAdmin
+                                                  ? Colors.white
+                                                  : adminInk,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                        const Divider(),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _msgController,
+                                decoration: const InputDecoration(
+                                  hintText: '?듬? ?낅젰...',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton(
+                              onPressed: () async {
+                                final text = _msgController.text.trim();
+                                if (text.isEmpty) return;
+                                await _repo.sendAdminMessage(
+                                  roomId: _selectedRoomId!,
+                                  sellerName:
+                                      _selectedSellerName ?? '愿由ъ옄',
+                                  text: text,
+                                );
+                                _msgController.clear();
+                              },
+                              child: const Text('諛쒖넚'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+String _contentTypeForName(String name) {
+  final lower = name.toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  return 'image/jpeg';
+}
