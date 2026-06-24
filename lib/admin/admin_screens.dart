@@ -748,7 +748,7 @@ class _AdminChatScreenState extends State<AdminChatScreen> {
                           return ListTile(
                             selected: isSelected,
                             selectedTileColor: adminSurface,
-                            title: Text(room['productTitle'] ?? '상품'),
+                            title: Text(room['listingTitle'] ?? room['productTitle'] ?? '상품'),
                             subtitle: Text(room['lastMessage'] ?? ''),
                             onTap: () => setState(() {
                               _selectedRoomId = room['id'];

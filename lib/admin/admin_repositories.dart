@@ -104,12 +104,13 @@ class AdminProductRepository {
     return _products.doc(productId).delete();
   }
   Stream<List<Map<String, dynamic>>> watchAdminChatRooms() {
+    final adminSellerIds = ['방콕사랑', '파타야사랑', '시라차사랑', '푸켓사랑', '치앙마이사랑', '라용사랑', '방센사랑'];
     return _firestore
         .collection('chatRooms')
-        .where('isAdminProduct', isEqualTo: true)
         .orderBy('lastMessageAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
+            .where((doc) => adminSellerIds.contains(doc.data()['sellerUid']))
             .map((doc) => {'id': doc.id, ...doc.data()})
             .toList());
   }
