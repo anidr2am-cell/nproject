@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'admin_app.dart';
 import 'admin_models.dart';
 import 'admin_repositories.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 const adminCategorySeeds = ['디지털기기', '생활가전', '의류', '가구', '자동차/바이크', '스포츠', '도서', '기타'];
 const adminLocationSeeds = ['방콕', '파타야', '시라차', '푸켓', '치앙마이', '라용', '방센'];
@@ -705,6 +706,147 @@ class AdminSettingsScreen extends StatelessWidget {
   }
 }
 
+class AdminNoticeScreen extends StatefulWidget {
+  const AdminNoticeScreen({super.key});
+
+  @override
+  State<AdminNoticeScreen> createState() => _AdminNoticeScreenState();
+}
+
+class _AdminNoticeScreenState extends State<AdminNoticeScreen> {
+  final _repo = AdminNoticeRepository();
+
+  Future<void> _openEditor({Map<String, dynamic>? notice}) async {
+    final titleController = TextEditingController(text: notice?['title'] ?? '');
+    final contentController = TextEditingController(text: notice?['content'] ?? '');
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(notice == null ? '공지사항 등록' : '공지사항 수정'),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(labelText: '제목'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: contentController,
+                minLines: 4,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  labelText: '내용',
+                  alignLabelWithHint: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final title = titleController.text.trim();
+              final content = contentController.text.trim();
+              if (title.isEmpty || content.isEmpty) return;
+              if (notice == null) {
+                await _repo.addNotice(title: title, content: content);
+              } else {
+                await _repo.updateNotice(
+                  id: notice['id'],
+                  title: title,
+                  content: content,
+                );
+              }
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+    titleController.dispose();
+    contentController.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminPage(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const _SectionTitle('공지사항 관리'),
+              FilledButton.icon(
+                onPressed: () => _openEditor(),
+                icon: const Icon(Icons.add),
+                label: const Text('공지 등록'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: _repo.watchNotices(),
+            builder: (context, snapshot) {
+              final notices = snapshot.data ?? [];
+              if (notices.isEmpty) {
+                return const _Panel(
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text('등록된 공지사항이 없습니다.', style: TextStyle(color: adminMuted)),
+                    ),
+                  ),
+                );
+              }
+              return _Panel(
+                child: Column(
+                  children: notices.map((notice) => ListTile(
+                    title: Text(
+                      notice['title'] ?? '',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(
+                      adminDateLabel(notice['createdAt'] is Timestamp
+                          ? (notice['createdAt'] as Timestamp).toDate()
+                          : null),
+                    ),
+                    trailing: Wrap(
+                      spacing: 8,
+                      children: [
+                        IconButton(
+                          tooltip: '수정',
+                          onPressed: () => _openEditor(notice: notice),
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                        IconButton(
+                          tooltip: '삭제',
+                          onPressed: () async {
+                            final confirmed = await _confirm(context, '공지사항을 삭제하시겠습니까?');
+                            if (confirmed) await _repo.deleteNotice(notice['id']);
+                          },
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        ),
+                      ],
+                    ),
+                  )).toList(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
 class AdminChatScreen extends StatefulWidget {
   const AdminChatScreen({super.key});
   @override

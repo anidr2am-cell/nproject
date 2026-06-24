@@ -119,6 +119,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const _NoticesBanner(),
+                  const SizedBox(height: 12),
                   QuickActionPanel(
                     selectedType: _selectedType,
                     onTypeSelected: (type) => setState(() {
@@ -497,6 +499,142 @@ class NotificationBadge extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+class _NoticesBanner extends StatelessWidget {
+  const _NoticesBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notices')
+          .orderBy('createdAt', descending: true)
+          .limit(5)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) return const SizedBox.shrink();
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0F4FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFD0DBFF)),
+          ),
+          child: Column(
+            children: docs.asMap().entries.map((entry) {
+              final doc = entry.value;
+              final data = doc.data() as Map<String, dynamic>;
+              final isLast = entry.key == docs.length - 1;
+              return Column(
+                children: [
+                  ListTile(
+                    dense: true,
+                    leading: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: brandPrimary,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        '공지',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      data['title'] ?? '',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+                    onTap: () => _showNoticeDetail(context, data),
+                  ),
+                  if (!isLast)
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                ],
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showNoticeDetail(BuildContext context, Map<String, dynamic> data) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: brandPrimary,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  '공지사항',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                data['title'] ?? '',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                data['content'] ?? '',
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.6,
+                  color: Color(0xFF444444),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -276,6 +276,7 @@ enum AdminSection {
   locations('지역 관리', Icons.place_outlined),
   reports('신고 관리', Icons.report_outlined),
   chat('채팅 관리', Icons.chat_bubble_outline),
+  notices('공지사항 관리', Icons.announcement_outlined),
   settings('설정', Icons.settings_outlined);
 
   const AdminSection(this.label, this.icon);
@@ -307,6 +308,7 @@ class _AdminShellState extends State<AdminShell> {
       AdminSection.locations => const AdminTaxonomyScreen.locations(),
       AdminSection.reports => const AdminReportsScreen(),
       AdminSection.chat => const AdminChatScreen(),
+      AdminSection.notices => const AdminNoticeScreen(),
       AdminSection.settings => const AdminSettingsScreen(),
     };
   }
@@ -433,6 +435,11 @@ class AdminNavigation extends StatelessWidget {
             ),
             _NavTile(
               section: AdminSection.chat,
+              selected: selected,
+              onSelected: onSelected,
+            ),
+            _NavTile(
+              section: AdminSection.notices,
               selected: selected,
               onSelected: onSelected,
             ),

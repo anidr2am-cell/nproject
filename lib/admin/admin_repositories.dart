@@ -363,3 +363,44 @@ class AdminReportRepository {
     }, SetOptions(merge: true));
   }
 }
+class AdminNoticeRepository {
+  AdminNoticeRepository({FirebaseFirestore? firestore})
+    : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  final FirebaseFirestore _firestore;
+
+  Stream<List<Map<String, dynamic>>> watchNotices() {
+    return _firestore
+        .collection('notices')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList());
+  }
+
+  Future<void> addNotice({required String title, required String content}) {
+    return _firestore.collection('notices').add({
+      'title': title,
+      'content': content,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> updateNotice({
+    required String id,
+    required String title,
+    required String content,
+  }) {
+    return _firestore.collection('notices').doc(id).update({
+      'title': title,
+      'content': content,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> deleteNotice(String id) {
+    return _firestore.collection('notices').doc(id).delete();
+  }
+}
