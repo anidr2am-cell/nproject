@@ -6,7 +6,7 @@ import 'admin_models.dart';
 import 'admin_repositories.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-const adminCategorySeeds = ['디지털기기', '생활가전', '의류', '가구', '자동차/바이크', '스포츠', '도서', '기타'];
+const adminCategorySeeds = ['디지털기기', '생활가전', '의류 / 잡화', '가구 / 인테리어', '자동차 / 바이크', '차량 용품', '스포츠 / 레저', '도서 / 티켓 / 취미', '킵카드', '회원권', '기타 중고물품'];
 const adminLocationSeeds = ['방콕', '파타야', '시라차', '푸켓', '치앙마이', '라용', '방센'];
 const adminStatuses = ['active', 'reserved', 'sold', 'hidden'];
 
